@@ -5,7 +5,9 @@ package com.jeesuite.kafka.monitor;
 
 import java.io.Closeable;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -18,12 +20,9 @@ import org.apache.commons.lang3.Validate;
 import com.jeesuite.common.json.JsonUtils;
 import com.jeesuite.kafka.monitor.model.BrokerInfo;
 import com.jeesuite.kafka.monitor.model.ConsumerGroupInfo;
-import com.jeesuite.kafka.monitor.model.ProducerInfo;
 import com.jeesuite.kafka.monitor.model.ProducerStat;
-import com.jeesuite.kafka.monitor.model.ProducerTopicInfo;
 import com.jeesuite.kafka.producer.handler.SendCounterHandler;
-
-import kafka.utils.ZKStringSerializer$;
+import com.jeesuite.kafka.serializer.ZKStringSerializer;
 
 /**
  * 
@@ -39,7 +38,7 @@ public class KafkaMonitor implements Closeable{
 	//消费延时阀值
 	private int latThreshold = 2000;
 	
-	private List<ProducerInfo> producerStats = new ArrayList<>();
+	private Map<String,List<ProducerStat>> producerStats = new HashMap<>();
 	
 	private List<ConsumerGroupInfo> consumerGroupResult = new ArrayList<>();
 	//
@@ -55,7 +54,7 @@ public class KafkaMonitor implements Closeable{
 		Validate.notBlank(kafkaServers);
 		this.latThreshold = latThreshold;
 		
-		zkClient = new ZkClient(zkServers, 10000, 10000, ZKStringSerializer$.MODULE$);
+		zkClient = new ZkClient(zkServers, 10000, 10000, new ZKStringSerializer());
 		
 		try {			
 			zkConsumerCommand = new ZkConsumerCommand(zkClient,zkServers, kafkaServers);
@@ -107,7 +106,14 @@ public class KafkaMonitor implements Closeable{
 		return consumerGroupResult;
 	}
 
-	public List<ProducerInfo> getProducerStats() {
+	public List<ProducerStat> getProducerStats(String groupName) {
+		if(producerStats.isEmpty()){
+			fetchProducerStatFromZK();
+		}
+		return producerStats.get(groupName);
+	}
+	
+	public Map<String,List<ProducerStat>> getAllProducerStats(){
 		if(producerStats.isEmpty()){
 			fetchProducerStatFromZK();
 		}
@@ -134,19 +140,22 @@ public class KafkaMonitor implements Closeable{
 
 	
 	private synchronized void fetchProducerStatFromZK(){
-		List<ProducerInfo> currentStats = new ArrayList<>();
+		Map<String,List<ProducerStat>> currentStats = new HashMap<>();
 		List<String> groups = zkClient.getChildren(SendCounterHandler.ROOT);
 		if(groups == null)return ;
 		
 		List<String> nodes;
-		ProducerInfo producerInfo;
+		List<ProducerStat> stats;
 		String groupPath,topicPath,nodePath;
 		for (String group : groups) {
-			producerInfo = new ProducerInfo(group);
+			stats = currentStats.get(group);
+			if(stats == null){
+				stats = new ArrayList<>();
+				currentStats.put(group, stats);
+			}
 			groupPath = SendCounterHandler.ROOT + "/" + group;
 			List<String> topics = zkClient.getChildren(groupPath);
 			for (String topic : topics) {				
-				ProducerTopicInfo topicInfo = new ProducerTopicInfo(topic);
 				topicPath = groupPath + "/" + topic;
 				nodes = zkClient.getChildren(topicPath);
 				for (String node : nodes) {
@@ -155,15 +164,9 @@ public class KafkaMonitor implements Closeable{
 					if(data != null){
 						ProducerStat stat = JsonUtils.toObject(data.toString(), ProducerStat.class);
 						stat.setSource(node);
-						topicInfo.getProducerStats().add(stat);
+						stats.add(stat);
 					}
 				}
-				if(!topicInfo.getProducerStats().isEmpty()){
-					producerInfo.getProducerTopics().add(topicInfo);
-				}
-			}
-			if(!producerInfo.getProducerTopics().isEmpty()){
-				currentStats.add(producerInfo);
 			}
 		}
 		producerStats = currentStats;
@@ -171,12 +174,12 @@ public class KafkaMonitor implements Closeable{
 
 	
 	public static void main(String[] args) {
-		KafkaMonitor monitor = new KafkaMonitor("127.0.0.1:2181", "127.0.0.1:9092", 1000);
+		KafkaMonitor monitor = new KafkaMonitor("192.168.1.94:2181", "192.168.1.94:9092", 1000);
 		
-		//List<ConsumerGroupInfo> groupInfos = monitor.getAllConsumerGroupInfos();
+		List<ConsumerGroupInfo> groupInfos = monitor.getAllConsumerGroupInfos();
 		
-		List<ProducerInfo> stats = monitor.getProducerStats();
-		System.out.println(JsonUtils.toJson(stats));
+		System.out.println(groupInfos);
+
 		monitor.close();
 	}
 	

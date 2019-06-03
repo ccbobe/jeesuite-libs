@@ -1,14 +1,14 @@
 package com.jeesuite.filesystem.provider.qiniu;
 
-import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
-import java.util.UUID;
+import java.util.HashMap;
+import java.util.Map;
 
-import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.Validate;
 
-import com.jeesuite.filesystem.FileType;
+import com.jeesuite.filesystem.UploadObject;
+import com.jeesuite.filesystem.UploadTokenParam;
 import com.jeesuite.filesystem.provider.AbstractProvider;
 import com.jeesuite.filesystem.provider.FSOperErrorException;
 import com.jeesuite.filesystem.utils.FilePathHelper;
@@ -19,6 +19,7 @@ import com.qiniu.storage.BucketManager;
 import com.qiniu.storage.Configuration;
 import com.qiniu.storage.UploadManager;
 import com.qiniu.util.Auth;
+import com.qiniu.util.StringMap;
 
 /**
  * 七牛文件服务
@@ -30,12 +31,34 @@ import com.qiniu.util.Auth;
 public class QiniuProvider extends AbstractProvider {
 
 	public static final String NAME = "qiniu";
+	private static final String DEFAULT_CALLBACK_BODY = "filename=${fname}&size=${fsize}&mimeType=${mimeType}&height=${imageInfo.height}&width=${imageInfo.width}";
+	
+	private static final String[] policyFields = new String[]{
+            "callbackUrl",
+            "callbackBody",
+            "callbackHost",
+            "callbackBodyType",
+            "fileType",
+            "saveKey",
+            "mimeLimit",
+            "fsizeLimit",
+            "fsizeMin",
+            "deleteAfterDays",
+    };
 
 	private static UploadManager uploadManager;
 	private static BucketManager bucketManager;
 	private Auth auth;
+	private boolean isPrivate;
+	private String host;
 
-	public QiniuProvider(String urlprefix, String bucketName, String accessKey, String secretKey) {
+	public QiniuProvider(String urlprefix, String bucketName, String accessKey, String secretKey,boolean isPrivate) {
+		
+		Validate.notBlank(bucketName, "[bucketName] not defined");
+		Validate.notBlank(accessKey, "[accessKey] not defined");
+		Validate.notBlank(secretKey, "[secretKey] not defined");
+		Validate.notBlank(urlprefix, "[urlprefix] not defined");
+		
 		this.urlprefix = urlprefix.endsWith(DIR_SPLITER) ? urlprefix : urlprefix + DIR_SPLITER;
 		this.bucketName = bucketName;
 		auth = Auth.create(accessKey, secretKey);
@@ -44,80 +67,102 @@ public class QiniuProvider extends AbstractProvider {
 		Configuration c = new Configuration(z);
 		uploadManager = new UploadManager(c);
 		bucketManager = new BucketManager(auth,c);
+		
+		this.isPrivate = isPrivate;
+		this.host = StringUtils.remove(urlprefix,"/").split(":")[1];
 	}
 
 	@Override
-	public String upload(String catalog, String fileName, File file) {
-		try {
-			if(fileName == null)fileName = file.getName();
-			fileName = rawFileName(catalog, fileName, null);
-			Response res = uploadManager.put(file, fileName, getUpToken());
-			return processUploadResponse(res);
-		} catch (QiniuException e) {
-			processUploadException(fileName, e);
+	public String upload(UploadObject object) {
+		String fileName = object.getFileName();
+		if(StringUtils.isNotBlank(object.getCatalog())){
+			fileName = object.getCatalog().concat(FilePathHelper.DIR_SPLITER).concat(fileName);
 		}
-		return null;
-	}
-
-	@Override
-	public String upload(String catalog, String fileName, byte[] data, FileType fileType) {
 		try {
-			if (fileType == null)
-				fileType = FileType.getFileSuffix(data);
-
-			fileName = rawFileName(catalog, fileName, fileType);
-			Response res = uploadManager.put(data, fileName, getUpToken());
-			return processUploadResponse(res);
-		} catch (QiniuException e) {
-			processUploadException(fileName, e);
-		}
-		return null;
-	}
-
-	@Override
-	public String upload(String catalog, String fileName, InputStream in, FileType fileType) {
-		try {
-			byte[] bs = IOUtils.toByteArray(in);
-			return upload(catalog, fileName, bs, fileType);
-		} catch (IOException e) {
-			throw new FSOperErrorException(name(), e);
-		}
-	}
-
-	@Override
-	public String upload(String catalog, String fileName, String origUrl) {
-		try {
-			if (StringUtils.isBlank(fileName)) {
-				FileType fileType = FilePathHelper.parseFileType(origUrl);
-				fileName = rawFileName(catalog, fileName, fileType);
-			} else {
-				fileName = rawFileName(catalog, fileName, null);
+			Response res = null;
+			String upToken = getUpToken(object.getMetadata());
+			if(object.getFile() != null){
+				res = uploadManager.put(object.getFile(), fileName, upToken);
+			}else if(object.getBytes() != null){
+				res = uploadManager.put(object.getBytes(), fileName, upToken);
+			}else if(object.getInputStream() != null){
+				res = uploadManager.put(object.getInputStream(), fileName, upToken, null, object.getMimeType());
+			}else if(StringUtils.isNotBlank(object.getUrl())){
+				return bucketManager.fetch(object.getUrl(), bucketName, fileName).key;
+			}else{
+				throw new IllegalArgumentException("upload object is NULL");
 			}
-
-			fileName = bucketManager.fetch(origUrl, bucketName, fileName).key;
-
-			return getFullPath(fileName);
+			return processUploadResponse(res);
 		} catch (QiniuException e) {
 			processUploadException(fileName, e);
 		}
-
 		return null;
 	}
 
 	@Override
-	public boolean delete(String fileName) {
+	public String getDownloadUrl(String fileKey) {
+		String path = getFullPath(fileKey);
+		if(isPrivate){
+			path = auth.privateDownloadUrl(path, 3600);
+		}
+		return path;
+	}
+
+	@Override
+	public boolean delete(String fileKey) {
 		try {
-			if (fileName.contains(DIR_SPLITER))
-				fileName = fileName.replace(urlprefix, "");
-			bucketManager.delete(bucketName, fileName);
+			if (fileKey.contains(DIR_SPLITER))
+				fileKey = fileKey.replace(urlprefix, "");
+			bucketManager.delete(bucketName, fileKey);
 			return true;
 		} catch (QiniuException e) {
-			processUploadException(fileName, e);
+			processUploadException(fileKey, e);
 		}
 		return false;
 	}
+	
+	@Override
+	public Map<String, Object> createUploadToken(UploadTokenParam param) {
+		
+		if(StringUtils.isNotBlank(param.getCallbackUrl())){
+			if(StringUtils.isBlank(param.getCallbackBody())){
+				param.setCallbackBody(DEFAULT_CALLBACK_BODY);
+			}
+			if(StringUtils.isBlank(param.getCallbackHost())){
+				param.setCallbackHost(host);
+			}
+		}
+		
+		Map<String, Object> result = new HashMap<>();
+		StringMap policy = new StringMap();
+		policy.putNotNull(policyFields[0], param.getCallbackUrl());
+		policy.putNotNull(policyFields[1], param.getCallbackBody());
+		policy.putNotNull(policyFields[2], param.getCallbackHost());
+		policy.putNotNull(policyFields[3], param.getCallbackBodyType());
+		policy.putNotNull(policyFields[4], param.getFileType());
+		policy.putNotNull(policyFields[5], param.getFileKey());
+		policy.putNotNull(policyFields[6], param.getMimeLimit());
+		policy.putNotNull(policyFields[7], param.getFsizeMin());
+		policy.putNotNull(policyFields[8], param.getFsizeMax());
+		policy.putNotNull(policyFields[9], param.getDeleteAfterDays());
 
+		String token = auth.uploadToken(bucketName, param.getFileKey(), param.getExpires(), policy, true);
+		result.put("uptoken", token);
+		result.put("host", this.urlprefix);
+		result.put("dir", param.getUploadDir());
+		
+		return result;
+	}
 
+	@Override
+	public void close() throws IOException {}
+
+	@Override
+	public String name() {
+		return NAME;
+	}
+
+	
 	/**
 	 * 处理上传结果，返回文件url
 	 * 
@@ -131,8 +176,8 @@ public class QiniuProvider extends AbstractProvider {
 		}
 		throw new FSOperErrorException(name(), res.toString());
 	}
-
-	private void processUploadException(String fileName, QiniuException e) {
+	
+	private void processUploadException(String fileKey, QiniuException e) {
 		Response r = e.response;
 		String message;
 		try {
@@ -143,42 +188,10 @@ public class QiniuProvider extends AbstractProvider {
 		throw new FSOperErrorException(name(), e.code(), message);
 	}
 
-	/**
-	 * @param fileName
-	 * @param fileType
-	 * @return
-	 */
-	private static String rawFileName(String catalog, String fileName, FileType fileType) {
-		if (StringUtils.isBlank(catalog))
-			catalog = "other";
-		if (StringUtils.isBlank(fileName)) {
-			fileName = UUID.randomUUID().toString().replaceAll("\\-", "")
-					+ (fileType == null ? "" : fileType.getSuffix());
-		} else if (fileType != null && !fileName.contains(".")) {
-			fileName = fileName + fileType.getSuffix();
-		}
-		return new StringBuilder(catalog).append(DIR_SPLITER).append(fileName).toString();
-	}
 
-	// 简单上传，使用默认策略
-	private String getUpToken() {
+	private String getUpToken(Map<String, Object> metadata) {
 		return auth.uploadToken(bucketName);
 	}
 
-	@Override
-	public String createUploadToken(String... fileNames) {
-		if (fileNames != null && fileNames.length > 0 && fileNames[0] != null) {
-			return auth.uploadToken(bucketName, fileNames[0]);
-		}
-		return auth.uploadToken(bucketName);
-	}
-
-	@Override
-	public String name() {
-		return NAME;
-	}
-	
-	@Override
-	public void close() throws IOException {}
 
 }

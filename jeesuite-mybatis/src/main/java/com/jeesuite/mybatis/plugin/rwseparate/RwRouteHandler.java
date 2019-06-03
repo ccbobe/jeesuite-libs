@@ -8,9 +8,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.jeesuite.mybatis.core.InterceptorHandler;
-import com.jeesuite.mybatis.core.InterceptorType;
 import com.jeesuite.mybatis.datasource.DataSourceContextHolder;
-import com.jeesuite.mybatis.plugin.JeesuiteMybatisPluginContext;
+import com.jeesuite.mybatis.plugin.JeesuiteMybatisInterceptor;
 
 
 /**
@@ -24,6 +23,8 @@ public class RwRouteHandler implements InterceptorHandler {
 
 	protected static final Logger logger = LoggerFactory.getLogger(RwRouteHandler.class);
 
+	public static final String NAME = "rwRoute";
+	
 	@Override
 	public Object onInterceptor(Invocation invocation) throws Throwable {
 		
@@ -54,14 +55,14 @@ public class RwRouteHandler implements InterceptorHandler {
 	public void onFinished(Invocation invocation,Object result) {}
 
 	@Override
-	public InterceptorType getInterceptorType() {
-		return InterceptorType.before;
-	}
-
-	@Override
-	public void start(JeesuiteMybatisPluginContext context) {}
+	public void start(JeesuiteMybatisInterceptor context) {}
 
 
 	@Override
 	public void close() {}
+
+	@Override
+	public int interceptorOrder() {
+		return 7;
+	}
 }

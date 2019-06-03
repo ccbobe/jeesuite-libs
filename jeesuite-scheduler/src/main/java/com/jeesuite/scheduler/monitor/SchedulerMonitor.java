@@ -10,6 +10,9 @@ import java.util.List;
 
 import org.I0Itec.zkclient.ZkClient;
 import org.I0Itec.zkclient.ZkConnection;
+import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.jeesuite.common.json.JsonUtils;
 import com.jeesuite.scheduler.model.JobConfig;
@@ -23,6 +26,8 @@ import com.jeesuite.scheduler.registry.ZkJobRegistry;
  */
 public class SchedulerMonitor implements Closeable{
 	
+	private static final Logger logger = LoggerFactory.getLogger(SchedulerMonitor.class);
+
 
 	private ZkClient zkClient;
 
@@ -41,34 +46,53 @@ public class SchedulerMonitor implements Closeable{
 		if(zkClient != null)zkClient.close();
 	}
 	
-	public List<JobGroupInfo> getAllJobGroups(){
-		
-		//zk registry
-		List<JobGroupInfo> result = new ArrayList<>();
-		String path = ZkJobRegistry.ROOT.substring(0,ZkJobRegistry.ROOT.length() - 1);
-		List<String> groupNames = zkClient.getChildren(path);
-		if(groupNames == null)return result;
-		for (String groupName : groupNames) {
-			JobGroupInfo groupInfo = new JobGroupInfo();
-			groupInfo.setName(groupName);
-			//
-			path = ZkJobRegistry.ROOT + groupName;
-			List<String> children = zkClient.getChildren(path);
-			for (String child : children) {
-				if("nodes".equals(child)){
-					path = ZkJobRegistry.ROOT + groupName + "/nodes";
-					groupInfo.setClusterNodes(zkClient.getChildren(path));
-				}else{
-					path = ZkJobRegistry.ROOT + groupName + "/" + child;
-					Object data = zkClient.readData(path);
-					if(data != null){						
-						JobConfig jobConfig = JsonUtils.toObject(data.toString(), JobConfig.class);
-						groupInfo.getJobs().add(jobConfig);
-					}
+	public JobGroupInfo getJobGroupInfo(String groupName){
+
+		if(StringUtils.isBlank(groupName)){
+			logger.warn("getJobGroupInfo groupName is required");
+			return null;
+		}
+		JobGroupInfo groupInfo = new JobGroupInfo();
+		groupInfo.setName(groupName);
+		//
+		String path = ZkJobRegistry.ROOT + groupName;
+		List<String> children = zkClient.getChildren(path);
+		for (String child : children) {
+			if("nodes".equals(child)){
+				path = ZkJobRegistry.ROOT + groupName + "/nodes";
+				groupInfo.setClusterNodes(zkClient.getChildren(path));
+			}else{
+				path = ZkJobRegistry.ROOT + groupName + "/" + child;
+				Object data = zkClient.readData(path);
+				if(data != null){						
+					JobConfig jobConfig = JsonUtils.toObject(data.toString(), JobConfig.class);
+					groupInfo.getJobs().add(jobConfig);
 				}
 			}
+		}
+		
+		if(groupInfo.getClusterNodes().size() > 0){				
+			return groupInfo;
+		}
+		
+		return null;
+	
+	}
+	
+	public List<String> getGroups(){
+		String path = ZkJobRegistry.ROOT.substring(0,ZkJobRegistry.ROOT.length() - 1);
+		return zkClient.getChildren(path);
+	}
+	
+	public List<JobGroupInfo> getAllJobGroups(){
+		//zk registry
+		List<JobGroupInfo> result = new ArrayList<>();
+		List<String> groupNames = getGroups();
+		if(groupNames == null)return result;
+		for (String groupName : groupNames) {
+			JobGroupInfo groupInfo = getJobGroupInfo(groupName);
 			
-			if(groupInfo.getClusterNodes().size() > 0){				
+			if(groupInfo != null){				
 				result.add(groupInfo);
 			}
 		}
@@ -81,9 +105,34 @@ public class SchedulerMonitor implements Closeable{
 		for (String node : nodeIds) {
 			String nodePath = path + "/" + node;
 			zkClient.writeData(nodePath, cmd);
+			logger.info("publishEvent finish，path:{},content:{}",nodePath,cmd);
 			break;
 		}
 		
+	}
+	
+	public void clearInvalidGroup(){
+
+    	List<String> groups = zkClient.getChildren(ZkJobRegistry.ROOT.substring(0, ZkJobRegistry.ROOT.length() - 1));
+    	logger.info("==============clear Invalid jobs=================");
+    	for (String group : groups) {
+    		String groupPath = ZkJobRegistry.ROOT + group;
+    		String nodeStateParentPath = groupPath + "/nodes";
+    		try {
+    			if(zkClient.exists(nodeStateParentPath) == false || zkClient.countChildren(nodeStateParentPath) == 0){
+    				List<String> jobs = zkClient.getChildren(groupPath);
+    				for (String job : jobs) {
+    					zkClient.delete(groupPath + "/" + job);
+    					logger.info("delete path:{}/{}",groupPath,job);
+    				}
+    				zkClient.delete(groupPath);
+    				logger.info("delete path:{}",groupPath);
+    			}
+			} catch (Exception e) {}
+		}
+    	logger.info("==============clear Invalid jobs end=================");
+    	
+    
 	}
 	
 	public static void main(String[] args) throws IOException {

@@ -4,21 +4,20 @@
 	<parent>
 		<groupId>com.jeesuite</groupId>
 		<artifactId>jeesuite-libs</artifactId>
-		<version>2</version>
+		<version>1.2.1-SNAPSHOT</version>
 	</parent>
 	<artifactId>jeesuite-scheduler</artifactId>
-	<version>1.0.7</version>
 
 	<dependencies>
 		<dependency>
 			<groupId>com.jeesuite</groupId>
 			<artifactId>jeesuite-common</artifactId>
-			<version>1.0.1</version>
+			<version>${project.parent.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>com.jeesuite</groupId>
 			<artifactId>jeesuite-spring</artifactId>
-			<version>1.0.0</version>
+			<version>${project.parent.version}</version>
 		</dependency>
 
 		<dependency>

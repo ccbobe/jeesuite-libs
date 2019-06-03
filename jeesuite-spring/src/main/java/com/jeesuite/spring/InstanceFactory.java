@@ -2,6 +2,8 @@ package com.jeesuite.spring;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.springframework.context.ApplicationContext;
+
 /**
  * 实例工厂类。通过它可以获得其管理的类的实例。 InstanceFactory向客户代码隐藏了IoC工厂的具体实现。在后台，它通过
  * InstanceProvider策略接口，允许选择不同的IoC工厂，例如Spring， Google Guice和TapestryIoC等等。
@@ -15,16 +17,27 @@ public class InstanceFactory {
 	private static SpringInstanceProvider instanceProvider;
 	private static Long timeStarting = System.currentTimeMillis();
 	private static AtomicBoolean initialized = new AtomicBoolean(false);
+	private static AtomicBoolean loadFinished = new AtomicBoolean(false);
 
 	/**
 	 * 设置实例提供者。
 	 * @param provider 一个实例提供者的实例。
 	 */
 	public static void setInstanceProvider(SpringInstanceProvider provider) {
+		if(instanceProvider != null)return;
 		instanceProvider = provider;
 		initialized.set(true);
 	}
+	
+	public static void loadFinished(SpringInstanceProvider provider){
+		setInstanceProvider(provider);
+		loadFinished.set(true);
+	}
 
+	public static boolean isLoadfinished(){
+		return loadFinished.get();
+	}
+	
 	/**
 	 * 获取指定类型的对象实例。如果IoC容器没配置好或者IoC容器中找不到该类型的实例则抛出异常。
 	 * 
@@ -66,6 +79,10 @@ public class InstanceFactory {
 		return instanceProvider;
 	}
 	
+	public static ApplicationContext getContext(){
+		return getInstanceProvider().getApplicationContext();
+	}
+	
 	/**
 	 * 这是一个阻塞方法，直到context初始化完成
 	 */
@@ -79,5 +96,11 @@ public class InstanceFactory {
 			System.out.println("Spring Initializing >>>>>"+waiting + " s");
 		}
 	}
+
+	public static boolean isInitialized() {
+		return initialized.get();
+	}
+	
+	
 
 }

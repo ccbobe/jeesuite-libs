@@ -28,6 +28,25 @@
       SELECT * FROM users where mobile = #{mobile} 
   </select>
   
+   <select id="findMobileByIds" parameterType="java.util.List" resultType="String">
+      SELECT mobile FROM users where id in
+     <foreach item="id" index="index" collection="list" open="(" separator="," close=")">
+			#{id}
+	 </foreach>
+  </select>
+  
+  <select id="queryByExample" resultMap="BaseResultMap" parameterType="com.jeesuite.mybatis.test.entity.UserEntity">
+      SELECT * FROM users where 1=1
+      <if test="name != null">  
+        AND name = #{name}  
+    </if> 
+    <if test="mobile != null">  
+        AND mobile = #{mobile}  
+    </if> 
+    <if test="type != null"><![CDATA[and type >=#{type}  ]]></if>
+	<if test="status != null"><![CDATA[and status <=#{status}  ]]></if>
+  </select>
+  
   <select id="countByExample" resultType="int" parameterType="com.jeesuite.mybatis.test.entity.UserEntity">
       SELECT count(0) FROM users where 1=1
       <if test="name != null">  
@@ -36,6 +55,19 @@
     <if test="mobile != null">  
         AND mobile = #{mobile}  
     </if> 
+  </select>
+  
+  <select id="pageQuery" parameterType="map" resultMap="BaseResultMap">
+    select * from users
+    <where>
+      <if test="example.status != null">
+        and status = #{example.status}
+      </if>
+      <if test="example.name != null">
+        and UPPER(name) like CONCAT('%', UPPER(#{example.name}), '%')  
+      </if>
+    </where>
+    order by id desc
   </select>
   
   <update id="updateType" parameterType="map">
@@ -54,5 +86,20 @@
         AND mobile = #{mobile}  
     </if> 
   </update>
+  
+   <select id="findByLoginName" resultMap="BaseResultMap">
+    select * from users 
+    where (name = #{name} or email = #{name} or mobile = #{name})
+  </select>
+  
+  <select id="findByWxUnionId" resultMap="BaseResultMap">
+    select * from users 
+    where id = (select user_id from sns_account_binding where union_id = #{unionId}  and enabled = 1 limit 1)
+  </select>
+  
+  
+  <select id="findWxUnionIdByUserId" resultType="String">
+    select union_id from sns_account_binding where user_id = #{userId} and enabled = 1 limit 1
+  </select>
   
 </mapper>

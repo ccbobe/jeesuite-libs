@@ -161,6 +161,11 @@ public class ZkJobRegistry implements JobRegistry,InitializingBean,DisposableBea
 					updateConfInZK = true;
 				}else if(currentTimeMillis - configFromZK.getModifyTime() > TimeUnit.MINUTES.toMillis(30)){
 					updateConfInZK = true;
+				}else{
+					if(!JobContext.getContext().getNodeId().equals(configFromZK.getCurrentNodeId())){				   
+						List<String> nodes = zkClient.getChildren(nodeStateParentPath);
+						updateConfInZK = !nodes.contains(configFromZK.getCurrentNodeId());
+					}
 				}
 			}else{
 				//zookeeper 该job不存在？
@@ -178,9 +183,6 @@ public class ZkJobRegistry implements JobRegistry,InitializingBean,DisposableBea
 		}
 		schedulerConfgs.put(conf.getJobName(), conf);
 		
-		//
-		regAndSubscribeNodeEvent();
-        
 		//订阅同步信息变化
         zkClient.subscribeDataChanges(path, new IZkDataListener() {
 			
@@ -197,16 +199,8 @@ public class ZkJobRegistry implements JobRegistry,InitializingBean,DisposableBea
 			}
 		});
         
-        //清除之前遗留节点
-        if(isFirstNode){
-        	List<String> historyJobNames = zkClient.getChildren(groupPath);
-        	for (String name : historyJobNames) {
-				if("nodes".equals(name) || conf.getJobName().equals(name))continue;
-				zkClient.delete(groupPath + "/" + name);
-				logger.info("delete history job path:{}/{}",groupPath,name);
-			}
-        	
-        }
+        //
+		regAndSubscribeNodeEvent();
         
         logger.info("finish register schConfig:{}",ToStringBuilder.reflectionToString(conf, ToStringStyle.MULTI_LINE_STYLE));
 	}
@@ -249,8 +243,10 @@ public class ZkJobRegistry implements JobRegistry,InitializingBean,DisposableBea
 			@Override
 			public void handleDataChange(String dataPath, Object data) throws Exception {
 				MonitorCommond cmd = (MonitorCommond) data;
-				logger.debug("收到commond:+" + cmd.toString());
-				execCommond(cmd);
+				if(cmd != null){					
+					logger.info("收到commond:" + cmd.toString());
+					execCommond(cmd);
+				}
 			}
 		});
         
@@ -296,12 +292,13 @@ public class ZkJobRegistry implements JobRegistry,InitializingBean,DisposableBea
 	@Override
 	public synchronized JobConfig getConf(String jobName,boolean forceRemote) {
 		JobConfig config = schedulerConfgs.get(jobName);
-		//如果只有一个节点就不从强制同步了
-		if(schedulerConfgs.size() == 1){
-			config.setCurrentNodeId(JobContext.getContext().getNodeId());
-			return config;
-		}
-		if(forceRemote){			
+		
+		if(forceRemote){	
+			//如果只有一个节点就不从强制同步了
+			if(JobContext.getContext().getActiveNodes().size() == 1){
+				config.setCurrentNodeId(JobContext.getContext().getNodeId());
+				return config;
+			}
 			String path = getPath(config);
 			try {				
 				config = getConfigFromZK(path,null);
@@ -342,7 +339,6 @@ public class ZkJobRegistry implements JobRegistry,InitializingBean,DisposableBea
 			JobConfig config = getConf(jobName,false);
 			config.setRunning(true);
 			config.setLastFireTime(fireTime);
-			config.setCurrentNodeId(JobContext.getContext().getNodeId());
 			config.setModifyTime(Calendar.getInstance().getTimeInMillis());
 			config.setErrorMsg(null);
 			//更新本地
@@ -406,19 +402,23 @@ public class ZkJobRegistry implements JobRegistry,InitializingBean,DisposableBea
 		final AbstractJob abstractJob = JobContext.getContext().getAllJobs().get(key);
 		if(MonitorCommond.TYPE_EXEC == cmd.getCmdType()){
 			if(config.isRunning()){
-				throw new RuntimeException("任务正在执行中，请稍后再执行");
+				logger.info("任务正在执行中，请稍后再执行");
+				return;
 			}
 			if(abstractJob != null){
-				new Thread(new Runnable() {
+				JobContext.getContext().submitSyncTask(new Runnable() {
 					@Override
 					public void run() {
 						try {
+							logger.info("begin execute job[{}] by MonitorCommond",abstractJob.getJobName());
 							abstractJob.doJob(JobContext.getContext());
 						} catch (Exception e) {
-							e.printStackTrace();
+							logger.error(abstractJob.getJobName(),e);
 						}
 					}
-				}).start();
+				});
+			}else{
+				logger.warn("Not found job by key:{} !!!!",key);
 			}
 		}else if(MonitorCommond.TYPE_STATUS_MOD == cmd.getCmdType() 
 				|| MonitorCommond.TYPE_CRON_MOD == cmd.getCmdType()){
@@ -449,6 +449,25 @@ public class ZkJobRegistry implements JobRegistry,InitializingBean,DisposableBea
 		config.setModifyTime(Calendar.getInstance().getTimeInMillis());
 		zkClient.writeData(getPath(config), JsonUtils.toJson(config));
 		schedulerConfgs.put(config.getJobName(), config);
+	}
+
+	@Override
+	public void onRegistered() {
+    	logger.info("==============clear Invalid jobs=================");
+    	List<String> jobs = zkClient.getChildren(groupPath);
+    	
+    	List<String> registerJobs = new ArrayList<>(JobContext.getContext().getAllJobs().keySet());
+    	String groupName = JobContext.getContext().getGroupName();
+    	String jobPath;
+    	for (String job : jobs) {
+    		if(job.equals("nodes"))continue;
+    		if(registerJobs.contains(groupName + ":" + job))continue;
+			jobPath = groupPath + "/" + job;
+			zkClient.delete(jobPath);
+		}
+    	logger.info("==============clear Invalid jobs end=================");
+    	
+    
 	}
 	
 }

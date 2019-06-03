@@ -5,6 +5,7 @@ package com.jeesuite.scheduler;
 
 import java.util.Calendar;
 import java.util.Date;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.commons.lang3.StringUtils;
@@ -17,7 +18,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.DisposableBean;
 
-import com.jeesuite.common.util.DateUtils;
 import com.jeesuite.scheduler.model.JobConfig;
 import com.jeesuite.spring.InstanceFactory;
 
@@ -29,8 +29,6 @@ import com.jeesuite.spring.InstanceFactory;
  * 创建日期：2012-2-13上午11:04:13  <br />   
  * 
  * 版本信息：v 1.0<br />
- * 
- * 版权信息：Copyright (c) 2011 Csair All Rights Reserved<br />
  * 
  * 作    者：<a href="mailto:vakinge@gmail.com">vakin jiang</a><br />
  * 
@@ -48,17 +46,21 @@ public abstract class AbstractJob implements DisposableBean{
     private Scheduler scheduler;
     private CronTriggerImpl cronTrigger;
     private TriggerKey triggerKey;
-    private long jobFireInterval = 0;//任务执行间隔（秒）
+    private long jobFireInterval = 0;//任务执行间隔（毫秒）
+    
+    //默认允许多个节点时间误差
+    private static final long DEFAULT_ALLOW_DEVIATION = 1000 * 60 * 15;
     
     private boolean executeOnStarted;//启动是否立即执行
     
     
     private int retries = 0;//失败重试次数
     
+    private AtomicBoolean runing = new AtomicBoolean(false);
     private AtomicInteger runCount = new AtomicInteger(0);
 
 	public void setGroup(String group) {
-		this.group = group;
+		this.group = StringUtils.trimToNull(group);
 	}
 	
 	public String getJobName() {
@@ -66,7 +68,7 @@ public abstract class AbstractJob implements DisposableBean{
 	}
 
 	public void setJobName(String jobName) {
-		this.jobName = jobName;
+		this.jobName = StringUtils.trimToNull(jobName);
 	}
 
 	public String getCronExpr() {
@@ -74,7 +76,7 @@ public abstract class AbstractJob implements DisposableBean{
 	}
 
 	public void setCronExpr(String cronExpr) {
-		this.cronExpr = cronExpr;
+		this.cronExpr = StringUtils.trimToNull(cronExpr);
 	}
 
 	public boolean isExecuteOnStarted() {
@@ -100,6 +102,7 @@ public abstract class AbstractJob implements DisposableBean{
     }
 
 	public void execute() {
+		if(runing.get())return;
 		// 避免InstanceFactory还未初始化，就执行
 		InstanceFactory.waitUtilInitialized();
 
@@ -107,6 +110,7 @@ public abstract class AbstractJob implements DisposableBean{
 		if (currentNodeIgnore(schConf))
 			return;
 
+		runing.set(true);
 		Date beginTime = null;
 		Exception exception = null;
 		try {
@@ -122,15 +126,17 @@ public abstract class AbstractJob implements DisposableBean{
 			if(retries > 0)JobContext.getContext().getRetryProcessor().submit(this, retries);
 			logger.error("Job_" + jobName + " execute error", e);
 			exception = e;
+		}finally {			
+			runing.set(false);
+			//执行次数累加1
+			runCount.incrementAndGet();
+			Date nextFireTime = getTrigger().getNextFireTime();
+			JobContext.getContext().getRegistry().setStoping(jobName, nextFireTime,exception);
+			//运行日志持久化
+			doJobLogPersist(schConf, exception, nextFireTime);
+			// 重置cronTrigger，重新获取才会更新previousFireTime，nextFireTime
+			cronTrigger = null;
 		}
-		//执行次数累加1
-		runCount.incrementAndGet();
-		Date nextFireTime = getTrigger().getNextFireTime();
-		JobContext.getContext().getRegistry().setStoping(jobName, nextFireTime,exception);
-		//运行日志持久化
-		doJobLogPersist(schConf, exception, nextFireTime);
-		// 重置cronTrigger，重新获取才会更新previousFireTime，nextFireTime
-		cronTrigger = null;
 	}
 
 	/**
@@ -162,34 +168,46 @@ public abstract class AbstractJob implements DisposableBean{
     	if(parallelEnabled())return false;
         try {
             if (!schConf.isActive()) {
-            	logger.trace("Job_{} 已禁用,终止执行", jobName);
+            	logger.debug("Job_{} 已禁用,终止执行", jobName);
                 return true;
             }
             
-          //下次执行时间 < 当前时间(忽略5秒误差) 强制执行
+            //执行间隔（秒）
+           // long interval = getJobFireInterval();
             long currentTimes = Calendar.getInstance().getTime().getTime();
-			if(schConf.getNextFireTime() != null 
-            		&& currentTimes - schConf.getNextFireTime().getTime() > 5000){
-            	logger.info("NextFireTime[{}] before currentTime[{}],re-join-execute task ",currentTimes,schConf.getNextFireTime().getTime());
-            	return false;
+            
+            if(schConf.getNextFireTime() != null){
+            	//下次执行时间 < 当前时间强制执行
+            	if(currentTimes - schConf.getNextFireTime().getTime() > DEFAULT_ALLOW_DEVIATION){
+                	logger.debug("Job_{} NextFireTime[{}] before currentTime[{}],re-join-execute task ",jobName,currentTimes,schConf.getNextFireTime().getTime());
+                	return false;
+                }
+            	//如果多个节点做了时间同步，那么误差应该为0才触发任务执行，但是考虑一些误差因素，可以做一个误差容错
+//            	if(schConf.getLastFireTime() != null){            		
+//            		long deviation = Math.abs(currentTimes - schConf.getLastFireTime().getTime() - interval);
+//            		if(interval > 0 && deviation > DEFAULT_ALLOW_DEVIATION){
+//            			logger.info("Job_{} interval:{},currentTimes:{},expect tiggertime:{}", jobName,interval,currentTimes, schConf.getLastFireTime().getTime());
+//            			return true;
+//            		}
+//            	}
             }
+			
             
           //如果执行节点不为空,且不等于当前节点
-            if(StringUtils.isNotBlank(schConf.getCurrentNodeId()) 
-            		&& !JobContext.getContext().getNodeId().equals(schConf.getCurrentNodeId())){
-            	logger.trace("Job_{} 当前指定执行节点:{}，不匹配当前节点:{}", jobName,schConf.getCurrentNodeId(),JobContext.getContext().getNodeId());
-            	return true;
+            if(StringUtils.isNotBlank(schConf.getCurrentNodeId()) ){            	
+            	if(!JobContext.getContext().getNodeId().equals(schConf.getCurrentNodeId())){
+            		logger.debug("Job_{} 指定执行节点:{}，不匹配当前节点:{}", jobName,schConf.getCurrentNodeId(),JobContext.getContext().getNodeId());
+            		return true;
+            	}
+            	//如果分配了节点，则可以保证本节点不会重复执行则不需要判断runing状态
+            }else{  
+            	if (schConf.isRunning()) {
+            		//如果某个节点开始了任务但是没有正常结束导致没有更新任务执行状态
+            		logger.info("Job_{} 其他节点[{}]正在执行,终止当前执行", schConf.getCurrentNodeId(),jobName);
+            		return true;
+            	}
             }
 
-            if (schConf.isRunning()) {
-            	//如果某个节点开始了任务但是没有正常结束导致没有更新任务执行状态
-                if (isAbnormalabort(schConf)) {
-                    this.cronExpr = schConf.getCronExpr();
-                    return false;
-                }
-                logger.debug("Job_{} 其他节点正在执行,终止当前执行", jobName);
-                return true;
-            }
             
             this.cronExpr = schConf.getCronExpr();
         } catch (Exception e) {
@@ -215,28 +233,7 @@ public abstract class AbstractJob implements DisposableBean{
          
     }  
     
-    /**
-     * 判断是否异常中断运行状态（）
-     * @param schConf
-     * @return
-     */
-    public boolean isAbnormalabort(JobConfig schConf){
-    	if(schConf.getLastFireTime() == null)return false;
-    	//上次开始执行到当前执行时长
-    	long runingTime = DateUtils.getDiffSeconds(schConf.getLastFireTime(), getTrigger().getPreviousFireTime());
-    	//正常阀值
-    	//考虑到一些长周期任务，预定一个任务执行最长周期为1800秒
-    	long threshold = getJobFireInterval() > 1800  ? 1800 : getJobFireInterval();
-    	
-    	if(runingTime > threshold){
-    		if (logger.isDebugEnabled())
-                logger.debug("Job_{} 执行时长[{}]秒,超过阀值[{}]秒，节点:{}可能发生故障,切换节点:{}", jobName,runingTime,threshold,schConf.getCurrentNodeId(),JobContext.getContext().getNodeId());
-            
-    		return true;
-    	}
-    	 
-    	return false;
-    }
+   
     
     /**
      * 获取任务执行间隔
@@ -244,10 +241,12 @@ public abstract class AbstractJob implements DisposableBean{
      * @throws SchedulerException
      */
     private long getJobFireInterval(){
-    	if(jobFireInterval == 0){    		
-    		Date nextFireTime = getTrigger().getNextFireTime();
-    		Date previousFireTime = getTrigger().getPreviousFireTime();
-    		jobFireInterval = (nextFireTime.getTime() - previousFireTime.getTime())/1000;
+    	if(jobFireInterval == 0){   
+    		try {				
+    			Date nextFireTime = getTrigger().getNextFireTime();
+    			Date previousFireTime = getTrigger().getPreviousFireTime();
+    			jobFireInterval = nextFireTime.getTime() - previousFireTime.getTime();
+			} catch (Exception e) {}
     	}
     	return jobFireInterval;
     }
@@ -307,6 +306,31 @@ public abstract class AbstractJob implements DisposableBean{
 		
 	}
 
+
+	@Override
+	public int hashCode() {
+		final int prime = 31;
+		int result = 1;
+		result = prime * result + ((jobName == null) ? 0 : jobName.hashCode());
+		return result;
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj)
+			return true;
+		if (obj == null)
+			return false;
+		if (getClass() != obj.getClass())
+			return false;
+		AbstractJob other = (AbstractJob) obj;
+		if (jobName == null) {
+			if (other.jobName != null)
+				return false;
+		} else if (!jobName.equals(other.jobName))
+			return false;
+		return true;
+	}
 
 	/**
 	 * 是否开启并行处理

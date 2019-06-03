@@ -1,6 +1,7 @@
 package com.jeesuite.common.json;
 
 import java.io.IOException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -51,11 +52,12 @@ public class JsonMapper {
 	
 	public JsonMapper dateAndTimestampConvert(boolean enabled) {
 		if(enabled){
-			mapper.enable(SerializationFeature.WRITE_ENUMS_USING_TO_STRING);
-			mapper.enable(DeserializationFeature.READ_ENUMS_USING_TO_STRING);
+			mapper.enable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+			mapper.enable(DeserializationFeature.READ_DATE_TIMESTAMPS_AS_NANOSECONDS);
 		}else{
-			mapper.disable(SerializationFeature.WRITE_ENUMS_USING_TO_STRING);
-			mapper.disable(DeserializationFeature.READ_ENUMS_USING_TO_STRING);
+			mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+			mapper.disable(DeserializationFeature.READ_DATE_TIMESTAMPS_AS_NANOSECONDS);
+			mapper.setDateFormat(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss"));
 		}
 		return this;
 		
@@ -171,7 +173,8 @@ public class JsonMapper {
 	public static JsonMapper getDefault() {
 		if(defaultMapper == null){
 			defaultMapper = new JsonMapper();
-			defaultMapper.dateAndTimestampConvert(false);
+			defaultMapper.enumAndStringConvert(true);
+			defaultMapper.dateAndTimestampConvert(true);
 		}
 		return defaultMapper;
 	}

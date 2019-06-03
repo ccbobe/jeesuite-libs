@@ -3,7 +3,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.jeesuite</groupId>
 	<artifactId>jeesuite-libs</artifactId>
-	<version>2</version>
+	<version>1.2.1-SNAPSHOT</version>
 	<packaging>pom</packaging>
 	<description>java 后台开发套件</description>
 	<name>jeesuite-libs</name>
@@ -40,13 +40,13 @@
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<compiler.jdk.version>1.8</compiler.jdk.version>
 		<output.encoding>utf-8</output.encoding>
-		<spring.version>4.2.5.RELEASE</spring.version>
-		<kafka.version>0.10.0.1</kafka.version>
-		<zkclient.version>0.7</zkclient.version>
-		<zookeeper.version>3.4.6</zookeeper.version>
-		<jedis.version>2.8.0</jedis.version>
-		<mybatis.version>3.3.0</mybatis.version>
-		<mapper.version>3.3.4</mapper.version>
+		<spring.version>4.3.7.RELEASE</spring.version>
+		<kafka.version>0.10.2.0</kafka.version>
+		<zkclient.version>0.10</zkclient.version>
+		<zookeeper.version>3.4.9</zookeeper.version>
+		<jedis.version>2.9.0</jedis.version>
+		<mybatis.version>3.4.2</mybatis.version>
+		<mapper.version>3.3.9</mapper.version>
 		<druid.version>1.0.16</druid.version>
 		<junit.version>4.12</junit.version>
 	</properties>
@@ -59,10 +59,17 @@
 		<module>jeesuite-scheduler</module>
 		<module>jeesuite-mybatis</module>
 		<module>jeesuite-rest</module>
-		<module>jeesuite-confcenter</module>
 		<module>jeesuite-common2</module>
-		<module>jeesuite-log</module>
 		<module>jeesuite-filesystem</module>
+		<module>jeesuite-springboot-starter</module>
+		<module>jeesuite-springweb</module>
+		<!-- 
+		<module>jeesuite-log</module>
+		<module>jeesuite-search</module>
+		<module>jeesuite-tx</module>
+		<module>jeesuite-sms</module>
+		<module>jeesuite-pay</module>
+		 -->
 	</modules>
 
 	<dependencies>
@@ -70,13 +77,15 @@
 		<dependency>
 			<groupId>org.apache.logging.log4j</groupId>
 			<artifactId>log4j-core</artifactId>
-			<version>2.5</version>
+			<version>2.7</version>
+			<optional>true</optional>
 		</dependency>
 
 		<dependency>
 			<groupId>org.apache.logging.log4j</groupId>
 			<artifactId>log4j-slf4j-impl</artifactId>
-			<version>2.5</version>
+			<version>2.7</version>
+			<optional>true</optional>
 		</dependency>
 
 		<dependency>
@@ -122,19 +131,6 @@
 						<configuration>
 							<skip>false</skip>
 						</configuration>
-					</plugin>
-
-					<plugin>
-						<groupId>org.apache.maven.plugins</groupId>
-						<artifactId>maven-source-plugin</artifactId>
-						<executions>
-							<execution>
-								<id>attach-sources</id>
-								<goals>
-									<goal>jar-no-fork</goal>
-								</goals>
-							</execution>
-						</executions>
 					</plugin>
 
 					<plugin>
@@ -187,6 +183,21 @@
 
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-source-plugin</artifactId>
+				<version>2.4</version>
+				<executions>
+					<execution>
+						<id>attach-sources</id>
+						<phase>verify</phase>
+						<goals>
+							<goal>jar-no-fork</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-deploy-plugin</artifactId>
 				<configuration>
 					<skip>false</skip>
@@ -196,11 +207,11 @@
 	</build>
 
 	<distributionManagement>
-	    <!-- mvn clean deploy -P release -DskipTests=true -Dgpg.passphrase=密码 -->
+		<!-- mvn clean deploy -P release -DskipTests=true -Dgpg.passphrase=密码 -->
 		<snapshotRepository>
-			<id>ossrh</id>
-			<url>https://oss.sonatype.org/content/repositories/snapshots</url>
-		</snapshotRepository>
+          <id>snapshots</id>
+          <url>http://test.com/nexus/content/repositories/snapshots</url>
+        </snapshotRepository>
 		<repository>
 			<id>ossrh</id>
 			<url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>

@@ -16,12 +16,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.jeesuite.mybatis.core.InterceptorHandler;
-import com.jeesuite.mybatis.core.InterceptorType;
 import com.jeesuite.mybatis.datasource.DataSourceContextHolder;
 import com.jeesuite.mybatis.kit.ReflectUtils;
 import com.jeesuite.mybatis.parser.EntityInfo;
 import com.jeesuite.mybatis.parser.MybatisMapperParser;
-import com.jeesuite.mybatis.plugin.JeesuiteMybatisPluginContext;
+import com.jeesuite.mybatis.plugin.JeesuiteMybatisInterceptor;
 
 /**
  * 分库自动路由处理
@@ -35,6 +34,8 @@ public class DatabaseRouteHandler implements InterceptorHandler {
 
 
 	protected static final Logger logger = LoggerFactory.getLogger(DatabaseRouteHandler.class);
+	
+	public static final String NAME = "dbShard";
 	
 	private static final String SPIT_POINT = ".";
 	private static final String REGEX_BLANK = "\\n+\\s+";
@@ -102,10 +103,6 @@ public class DatabaseRouteHandler implements InterceptorHandler {
 
 	}
 
-	@Override
-	public InterceptorType getInterceptorType() {
-		return InterceptorType.before;
-	}
 	
 	/**
 	 * 判断该条sql是否需要分库
@@ -160,7 +157,7 @@ public class DatabaseRouteHandler implements InterceptorHandler {
 
 
 	@Override
-	public void start(JeesuiteMybatisPluginContext context) {
+	public void start(JeesuiteMybatisInterceptor context) {
 		
 		List<EntityInfo> entityInfos = MybatisMapperParser.getEntityInfos();
 		
@@ -226,6 +223,11 @@ public class DatabaseRouteHandler implements InterceptorHandler {
 	@Override
 	public void close() {
 		
+	}
+
+	@Override
+	public int interceptorOrder() {
+		return 8;
 	}
 
 } 

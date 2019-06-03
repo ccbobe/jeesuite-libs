@@ -11,8 +11,11 @@ import org.springframework.web.filter.RequestContextFilter;
 import com.fasterxml.jackson.jaxrs.json.JacksonJsonProvider;
 import com.jeesuite.rest.excetion.BaseExceptionMapper;
 import com.jeesuite.rest.filter.DefaultWebFilter;
+import com.jeesuite.rest.filter.FilterConfig;
 import com.jeesuite.rest.resolver.ObjectMapperResolver;
 import com.jeesuite.rest.resolver.ValidationContextResolver;
+
+import io.swagger.jaxrs.listing.SwaggerSerializers;
 
 /**
  * @description <br>
@@ -31,6 +34,7 @@ public abstract class BaseApplicaionConfig extends ResourceConfig implements Cus
 	    property(ServerProperties.BV_DISABLE_VALIDATE_ON_EXECUTABLE_OVERRIDE_CHECK, true);
 				
 		this.packages(packages());
+		
 		register(ObjectMapperResolver.class);
 		register(JacksonFeature.class);
 		register(JacksonJsonProvider.class);
@@ -38,6 +42,10 @@ public abstract class BaseApplicaionConfig extends ResourceConfig implements Cus
 		register(RequestContextFilter.class);
 		
 		register(DefaultWebFilter.class);
+		//
+		if(FilterConfig.apiDocEnabled()){
+			register(SwaggerSerializers.class);
+		}
 	}
 
 	

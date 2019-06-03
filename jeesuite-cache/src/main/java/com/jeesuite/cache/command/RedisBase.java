@@ -5,18 +5,21 @@ package com.jeesuite.cache.command;
 
 import static com.jeesuite.cache.redis.JedisProviderFactory.getBinaryJedisClusterCommands;
 import static com.jeesuite.cache.redis.JedisProviderFactory.getBinaryJedisCommands;
+import static com.jeesuite.cache.redis.JedisProviderFactory.getJedisCommands;
 import static com.jeesuite.cache.redis.JedisProviderFactory.getJedisProvider;
 import static com.jeesuite.cache.redis.JedisProviderFactory.isCluster;
 
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Set;
 
 import org.apache.commons.lang3.RandomUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.jeesuite.cache.CacheExpires;
+import com.jeesuite.cache.redis.JedisProviderFactory;
 import com.jeesuite.common.serializer.SerializeUtils;
 
 import redis.clients.util.SafeEncoder;
@@ -31,48 +34,49 @@ public abstract class RedisBase {
 	
 	protected static final Logger logger = LoggerFactory.getLogger(RedisBase.class);
 	
-	protected static final String KEY_SUFFIX_SPLIT = "::";
-    //
 	protected static final String RESP_OK = "OK";
 	//
 	//
     protected String groupName;
     
-	protected byte[] key;
+	protected byte[] keyBytes;
 	
-	protected String origKey;
+	protected String key;
+	
+	boolean isBinary = true;
 	
 	public byte[] getKey() {
-		return key;
+		return keyBytes;
 	}
 
 	public RedisBase(String key) {
-		this.origKey = key;
-		//
-		if(key.contains(KEY_SUFFIX_SPLIT)){
-			this.groupName = key.split(KEY_SUFFIX_SPLIT)[0];
-		}
-		this.key = SafeEncoder.encode(key);
+		this(key, null,true);
 	}
 	
-	public RedisBase(String key,String groupName) {
-		this.origKey = key;
-		this.key = SafeEncoder.encode(key);
+	public RedisBase(String key,boolean isBinary) {
+		this(key, null, isBinary);
+	}
+	
+	public RedisBase(String key,String groupName,boolean isBinary) {
 		this.groupName = groupName;
+		this.key = key;
+		this.isBinary = isBinary;
+		if(isBinary)this.keyBytes = SafeEncoder.encode(key);
 	}
 
 	/**
 	 * 检查给定 key 是否存在。
 	 * 
-	 * @param key
+	 * @param keyBytes
 	 * @return
 	 */
 	public boolean exists() {
 		try {
+			if(!isBinary)return getJedisCommands(groupName).exists(key);
 			if(isCluster(groupName)){
-				return getBinaryJedisClusterCommands(groupName).exists(key);
+				return getBinaryJedisClusterCommands(groupName).exists(keyBytes);
 			}
-			return getBinaryJedisCommands(groupName).exists(key);
+			return getBinaryJedisCommands(groupName).exists(keyBytes);
 		} finally {
 			getJedisProvider(groupName).release();
 		}
@@ -85,17 +89,18 @@ public abstract class RedisBase {
 	 * 
 	 * 不存在的 key 会被忽略。
 	 * 
-	 * @param key
+	 * @param keyBytes
 	 * @return true：存在该key删除时返回
 	 * 
 	 *         false：不存在该key
 	 */
 	public boolean remove() {
 		try {
+			if(!isBinary)return getJedisCommands(groupName).del(key) == 1;
 			if(isCluster(groupName)){
-				return getBinaryJedisClusterCommands(groupName).del(key) == 1;
+				return getBinaryJedisClusterCommands(groupName).del(keyBytes) == 1;
 			}
-			return getBinaryJedisCommands(groupName).del(key) == 1;
+			return getBinaryJedisCommands(groupName).del(keyBytes) == 1;
 		} finally {
 			getJedisProvider(groupName).release();
 		}
@@ -104,7 +109,7 @@ public abstract class RedisBase {
 	/**
 	 * 为给定 key 设置生存时间，当 key 过期时(生存时间为 0 )，它会被自动删除。
 	 * 
-	 * @param key
+	 * @param keyBytes
 	 * @param seconds
 	 *            超时时间，单位：秒
 	 * @return true：超时设置成功
@@ -114,10 +119,11 @@ public abstract class RedisBase {
 	public boolean setExpire(long seconds) {
 		if(seconds <= 0)return true;
 		try {
+			if(!isBinary)return getJedisCommands(groupName).expire(key, (int)seconds) == 1;
 			if(isCluster(groupName)){
-				return getBinaryJedisClusterCommands(groupName).pexpire(key, seconds * 1000) == 1;
+				return getBinaryJedisClusterCommands(groupName).expire(keyBytes, (int)seconds) == 1;
 			}
-			return getBinaryJedisCommands(groupName).pexpire(key, seconds * 1000) == 1;
+			return getBinaryJedisCommands(groupName).expire(keyBytes, (int)seconds) == 1;
 		} finally {
 			getJedisProvider(groupName).release();
 		}
@@ -130,7 +136,7 @@ public abstract class RedisBase {
 	 *
 	 * 注意：redis服务器时间问题
 	 * 
-	 * @param key
+	 * @param keyBytes
 	 * @param expireAt
 	 *            超时时间点
 	 * @return true：超时设置成功
@@ -139,10 +145,11 @@ public abstract class RedisBase {
 	 */
 	public boolean setExpireAt(Date expireAt) {
 		try {
+			if(!isBinary)return getJedisCommands(groupName).pexpireAt(key, expireAt.getTime()) == 1;
 			if(isCluster(groupName)){
-				return getBinaryJedisClusterCommands(groupName).pexpireAt(key, expireAt.getTime()) == 1;
+				return getBinaryJedisClusterCommands(groupName).pexpireAt(keyBytes, expireAt.getTime()) == 1;
 			}
-			return getBinaryJedisCommands(groupName).pexpireAt(key, expireAt.getTime()) == 1;
+			return getBinaryJedisCommands(groupName).pexpireAt(keyBytes, expireAt.getTime()) == 1;
 		} finally {
 			getJedisProvider(groupName).release();
 		}
@@ -162,22 +169,21 @@ public abstract class RedisBase {
 	}
 
 	/**
-	 * 返回给定 key 的剩余生存时间
+	 * 返回给定 key 的剩余生存时间(单位：秒)
 	 * 
-	 * @param key
+	 * @param keyBytes
 	 * @return 当 key 不存在时，返回 -2 。
-	 * 
 	 *         当 key 存在但没有设置剩余生存时间时，返回 -1 。
-	 * 
-	 *         否则，以毫秒为单位，返回 key的剩余生存时间。
+	 *         否则返回 key的剩余生存时间。
 	 */
 	public Long getTtl() {
 		try {
+			if(!isBinary)return getJedisCommands(groupName).ttl(key);
 			long result = 0;
 			if(isCluster(groupName)){
-				result = getBinaryJedisClusterCommands(groupName).ttl(key);
+				result = getBinaryJedisClusterCommands(groupName).ttl(keyBytes);
 			}else{					
-				result = getBinaryJedisCommands(groupName).ttl(key);
+				result = getBinaryJedisCommands(groupName).ttl(keyBytes);
 			}
 			return result;
 		} finally {
@@ -189,17 +195,18 @@ public abstract class RedisBase {
 	/**
 	 * 移除给定 key 的生存时间，设置为永久有效
 	 * 
-	 * @param key
+	 * @param keyBytes
 	 * @return 当生存时间移除成功时，返回 1 .
 	 * 
 	 *         如果 key 不存在或 key 没有设置生存时间，返回 0 。
 	 */
 	public boolean removeExpire() {
 		try {
+			if(!isBinary)return getJedisCommands(groupName).persist(key) == 1;
 			if(isCluster(groupName)){
-				return getBinaryJedisClusterCommands(groupName).persist(key) == 1;
+				return getBinaryJedisClusterCommands(groupName).persist(keyBytes) == 1;
 			}
-			return getBinaryJedisCommands(groupName).persist(key) == 1;
+			return getBinaryJedisCommands(groupName).persist(keyBytes) == 1;
 		} finally {
 			getJedisProvider(groupName).release();
 		}
@@ -208,7 +215,7 @@ public abstract class RedisBase {
 	/**
 	 * 返回 key 所储存的值的类型。
 	 * 
-	 * @param key
+	 * @param keyBytes
 	 * @return none (key不存在)
 	 * 
 	 *         string (字符串)
@@ -224,13 +231,23 @@ public abstract class RedisBase {
 	public String type() {
 		try {
 			if(isCluster(groupName)){
-				return getBinaryJedisClusterCommands(groupName).type(key);
+				return getBinaryJedisClusterCommands(groupName).type(keyBytes);
 			}
-			return getBinaryJedisCommands(groupName).type(key);
+			return getBinaryJedisCommands(groupName).type(keyBytes);
 		} finally {
 			getJedisProvider(groupName).release();
 		}
 
+	}
+	
+	/**
+	 * 查找所有符合给定模式 pattern 的 key
+	 * @param pattern
+	 * @return
+	 */
+	public Set<String> keys(String pattern){
+		Set<String> keys = JedisProviderFactory.getMultiKeyCommands(groupName).keys(pattern);
+		return keys;
 	}
 
 	protected byte[] valueSerialize(Object value) {
@@ -260,7 +277,7 @@ public abstract class RedisBase {
 			return (T)SerializeUtils.deserialize(bytes);
 		} catch (Exception e) {
 			remove();
-			logger.warn("get key[{}] from redis is not null,but Deserialize error,message:{}",origKey,e);
+			logger.warn("get key[{}] from redis is not null,but Deserialize error,message:{}",key,e);
 			return null;
 		}
 	}

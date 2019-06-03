@@ -23,9 +23,12 @@ public class ProducerSimpleClient implements ApplicationContextAware{
 	@Test
 	public void testPublish() throws InterruptedException{
         //默认模式（异步/ ）发送
-		for (int i = 0; i < 5; i++) {			
-			topicProducer.publish("demo-topic", new DefaultMessage("hello,man"));
-			topicProducer.publish("demo2-topic", new DefaultMessage("hello,women"));
+		for (int i = 0; i < 1; i++) {	
+			User user = new User();
+			user.setId(100+i);
+			user.setName("jack");
+			topicProducer.publish("demo-topic1", new DefaultMessage(user).sendBodyOnly(true));
+			topicProducer.publish("demo-topic2", new DefaultMessage(user));
 		}
 //		
 //		DefaultMessage msg = new DefaultMessage("hello,man")
@@ -41,6 +44,8 @@ public class ProducerSimpleClient implements ApplicationContextAware{
 //		user.setName("kafka");
 //		//异步发送
 //		topicProducer.publishNoWrapperMessage("demo-topic", JsonUtils.toJson(user),true);
+		
+		Thread.sleep(5000);
 				
 	}
 	

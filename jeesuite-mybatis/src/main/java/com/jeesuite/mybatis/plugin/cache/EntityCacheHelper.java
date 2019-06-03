@@ -3,8 +3,10 @@
  */
 package com.jeesuite.mybatis.plugin.cache;
 
+import java.io.Serializable;
 import java.util.concurrent.Callable;
 
+import com.jeesuite.cache.command.RedisObject;
 import com.jeesuite.mybatis.core.BaseEntity;
 
 /**
@@ -15,6 +17,11 @@ import com.jeesuite.mybatis.core.BaseEntity;
  * @date 2016年11月19日
  */
 public class EntityCacheHelper {
+	
+	public static <T extends BaseEntity> void addCache(T bean,int expireSeconds){
+		String key = buildCacheKey(bean.getClass(), bean.getId());
+		new RedisObject(key).set(bean, expireSeconds);
+	}
 
 	/**
 	 * 查询并缓存结果(默认缓存一天)
@@ -24,7 +31,7 @@ public class EntityCacheHelper {
 	 * @return
 	 */
 	public static <T> T queryTryCache(Class<? extends BaseEntity> entityClass,String key,Callable<T> dataCaller){
-		return queryTryCache(entityClass, key, CacheExpires.IN_1DAY, dataCaller);
+		return queryTryCache(entityClass, key, CacheHandler.defaultCacheExpire, dataCaller);
 	}
 	
 	/**
@@ -54,23 +61,13 @@ public class EntityCacheHelper {
 				if(result != null){
 					CacheHandler.cacheProvider.set(key, result, expireSeconds);
 					String cacheGroupKey = entityClassName + CacheHandler.GROUPKEY_SUFFIX;
-					CacheHandler.cacheProvider.putGroupKeys(cacheGroupKey, key, expireSeconds);
+					CacheHandler.cacheProvider.putGroup(cacheGroupKey, key, expireSeconds);
 				}
 			} catch (Exception e) {
 				throw new RuntimeException(e);
 			}
 		}
 		return result;
-	}
-	
-	/**
-	 * 移除指定实体组所有缓存
-	 * @param entityClass
-	 */
-	public static void removeCache(Class<? extends BaseEntity> entityClass){
-		if(CacheHandler.cacheProvider == null)return;
-		String entityClassName = entityClass.getSimpleName();
-		CacheHandler.cacheProvider.clearGroup(entityClassName);
 	}
 	
 	/**
@@ -85,7 +82,32 @@ public class EntityCacheHelper {
 		String cacheGroupKey = entityClassName + CacheHandler.GROUPKEY_SUFFIX;
 		
 		CacheHandler.cacheProvider.remove(key);
-		CacheHandler.cacheProvider.clearGroupKey(cacheGroupKey, key);
+		CacheHandler.cacheProvider.removeFromGroup(cacheGroupKey, key);
 		
+	}
+	
+	/**
+	 * 移除指定对象缓存
+	 * @param bean
+	 */
+	public static <T extends BaseEntity> void removeCache(T bean){
+		if(CacheHandler.cacheProvider == null)return;
+		String key = buildCacheKey(bean.getClass(), bean.getId());
+		CacheHandler.cacheProvider.remove(key);
+	}
+	
+	/**
+	 * 移除指定实体组所有缓存
+	 * @param entityClass
+	 */
+	public static void removeCache(Class<? extends BaseEntity> entityClass){
+		if(CacheHandler.cacheProvider == null)return;
+		String entityClassName = entityClass.getSimpleName();
+		CacheHandler.cacheProvider.clearGroup(entityClassName,true);
+	}
+	
+    
+    public static String buildCacheKey(Class<?> entityClass,Serializable id){
+		return entityClass.getSimpleName() + ".id:" + id;
 	}
 }

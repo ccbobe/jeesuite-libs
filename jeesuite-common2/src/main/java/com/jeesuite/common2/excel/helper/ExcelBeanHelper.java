@@ -7,8 +7,7 @@ import java.beans.PropertyDescriptor;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -17,20 +16,17 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import org.apache.commons.lang3.StringUtils;
 
+import com.jeesuite.common2.excel.ExcelOperBaseException;
 import com.jeesuite.common2.excel.annotation.TitleCell;
-import com.jeesuite.common2.excel.model.TitleCellBean;
+import com.jeesuite.common2.excel.model.ExcelMeta;
+import com.jeesuite.common2.excel.model.TitleMeta;
 
 public class ExcelBeanHelper {
 
 	private static Map<String, Map<String, PropertyDescriptor>> aliasPropertyDescriptorCache = new ConcurrentHashMap<String, Map<String, PropertyDescriptor>>();
 
-	private static Map<String, List<TitleCellBean>> titleCellBeanCache = new ConcurrentHashMap<String, List<TitleCellBean>>();
+	private static Map<String, ExcelMeta> titleCellBeanCache = new ConcurrentHashMap<String, ExcelMeta>();
 
-	private static Map<String, String[]> titlesCache = new ConcurrentHashMap<String, String[]>();
-	
-	private static Map<String, Integer> titleRowCache = new ConcurrentHashMap<String, Integer>();
-
-	
 	public static <T> List<T> setRowValues(Class<T> clazz,List<String> contents){
 
 		try {	
@@ -38,25 +34,57 @@ public class ExcelBeanHelper {
 			
 			List<T> results = new ArrayList<>();
 			if(contents.isEmpty())return results;
-			String[] titles = titlesCache.get(clazz.getCanonicalName());
-			int titleRowCount = titleRowCache.get(clazz.getCanonicalName());
+			
+			String[] titles = getExcelMeta(clazz).getFinalTitles();
+			
+			int titleRowCount = getExcelMeta(clazz).getTitleRowNum();
+			
+			//解析内容标题内容为数组
+			List<String> contentTitles = new ArrayList<>();
+			//第一行为sheet信息
+			for (int i = 1; i <= titleRowCount; i++) {
+				contentTitles.addAll(Arrays.asList(contents.get(i).split(ExcelValidator.FIELD_SPLIT)));
+			}
+			
+			for (int i = 0; i < titles.length; i++) {
+				if(titleRowCount == 1){
+					if(!StringUtils.equals(titles[i], contentTitles.get(i)))throw new ExcelOperBaseException("格式错误，没有找到列["+titles[i] + "]");
+				}else{
+					if(!contentTitles.contains(titles[i]))throw new ExcelOperBaseException("格式错误，没有找到列["+titles[i] + "]");
+				}
+			}
+			
 			String[] vals = null;
-			for (int i = titleRowCount; i < contents.size(); i++) {
+			for (int i = titleRowCount + 1; i < contents.size(); i++) {
+				String line = contents.get(i);
+				if(line.startsWith(ExcelValidator.SHEET_NAME_PREFIX)){
+					throw new ExcelOperBaseException("模板错误(暂不支持多个sheet)");
+				}
 				T instance = clazz.newInstance();
-				vals = contents.get(i).split(ExcelValidator.FIELD_SPLIT);
+				vals = line.split(ExcelValidator.FIELD_SPLIT);
 
-				for (int j = 0; j < vals.length; j++) {
+				boolean anyColumnNotEmpty = false;
+				inner:for (int j = 0; j < titles.length; j++) {
+					if(vals.length < j + 1 )break inner;
+					anyColumnNotEmpty = anyColumnNotEmpty || StringUtils.isNotBlank(vals[j]);
 					PropertyDescriptor propertyDescriptor = pds.get(clearWrapper(titles[j]).trim());
 					if(propertyDescriptor != null && vals[j] != null){
-						Object rawValue = rawValue(vals[j],propertyDescriptor.getPropertyType());
-						propertyDescriptor.getWriteMethod().invoke(instance, rawValue);
+						try {
+							Object rawValue = rawValue(vals[j],propertyDescriptor.getPropertyType());
+							propertyDescriptor.getWriteMethod().invoke(instance, rawValue);
+						} catch (Exception e) {
+							// TODO: handle exception
+						}
 					}
 				}
-				results.add(instance);
+				if(anyColumnNotEmpty){					
+					results.add(instance);
+				}
 			}
 			
 			return results;
 		} catch (Exception e) {
+			if(e instanceof ExcelOperBaseException)throw (ExcelOperBaseException)e;
 			throw new BeanConverterException(e);
 		}
 	
@@ -68,14 +96,11 @@ public class ExcelBeanHelper {
 		
 		List<Object[]> result = new ArrayList<>(datas.size() + 1);
 		
-		String[] titles = titlesCache.get(clazz.getCanonicalName());
-		
-		result.add(titles);
+		String[] titles = getExcelMeta(clazz).getFinalTitles();
 		
 		if(datas == null || datas.isEmpty())return result;
-		
-		
-		int valNums = titlesCache.get(clazz.getCanonicalName()).length;
+			
+		int valNums = titles.length;
 		Object[] valArrs;
 		for (T e : datas) {
 			valArrs = new Object[valNums];
@@ -93,6 +118,15 @@ public class ExcelBeanHelper {
 		}
 		return result;
 	}
+	
+	
+	public static ExcelMeta getExcelMeta(Class<?> clazz){
+		String key = clazz.getCanonicalName();
+		if(!titleCellBeanCache.containsKey(key)){
+			getAliasPropertyDescriptors(clazz);
+		}
+		return titleCellBeanCache.get(key);
+	}
 
 	
 	 private static Object rawValue(String value,Class<?> propertyType){
@@ -101,15 +135,17 @@ public class ExcelBeanHelper {
 	    	if (propertyType == String.class) {
 	    		return result;
 	        }else if (propertyType == BigDecimal.class) {
-	    		result = new BigDecimal(value);
+	    		result = new BigDecimal(value.replaceAll(",", ""));
 	        } else if (propertyType == byte.class || propertyType == Byte.class) {
 	        	result = Byte.valueOf(value);
 	        } else if (propertyType == short.class || propertyType == Short.class) {
-	        	result = Short.valueOf(value.toString());
+	        	result = Short.valueOf(value.replaceAll(",", ""));
 	        } else if (propertyType == int.class || propertyType == Integer.class) {
-	        	result = Integer.parseInt(value);
+	        	result = Integer.parseInt(value.replaceAll(",", ""));
 	        } else if (propertyType == double.class || propertyType == Double.class) {
-	        	result = Double.valueOf(value.toString());
+	        	result = Double.valueOf(value.replaceAll(",", ""));
+	        }else if (propertyType == float.class || propertyType == Float.class) {
+	        	result = Float.parseFloat(value.replaceAll(",", ""));
 	        } else if (propertyType == Date.class) {
 	        	if(value != null){
 	        		//TODO
@@ -152,14 +188,14 @@ public class ExcelBeanHelper {
 		Map<String, PropertyDescriptor> map = new HashMap<>();
 		Map<String, PropertyDescriptor> aliasMap = new HashMap<>();
 
-		List<TitleCellBean> titleCellBeans = new ArrayList<>();
+		List<TitleMeta> titleMetas = new ArrayList<>();
 
 		BeanInfo srcBeanInfo = Introspector.getBeanInfo(clazz);
 
 		PropertyDescriptor[] descriptors = srcBeanInfo.getPropertyDescriptors();
 		
-		Map<String, TitleCellBean> parentMap = new HashMap<>();
-		int index = 0,subIndex = 0,titleRow = 1;
+		Map<String, TitleMeta> parentMap = new HashMap<>();
+		int maxRow = 1;
 		
 		for (PropertyDescriptor descriptor : descriptors) {
 
@@ -200,59 +236,42 @@ public class ExcelBeanHelper {
 				if(annotation != null){
 					aliasMap.put(annotation.name().trim(), descriptor);
 					
-					TitleCellBean cell = new TitleCellBean(annotation.name());
+					TitleMeta cell = new TitleMeta(annotation.name());
+					cell.setValueType(annotation.type());
 					
 					if(StringUtils.isBlank(annotation.parentName())){
-						cell.setColumnIndex(++index);
-						titleCellBeans.add(cell);
+						cell.setColumnIndex(annotation.column());
+						cell.setRowIndex(annotation.row());
+						titleMetas.add(cell);
 					}else{
-						TitleCellBean cellParent = parentMap.get(annotation.parentName());
+						TitleMeta cellParent = parentMap.get(annotation.parentName());
 						if(cellParent == null){
-							subIndex = index;
-							cellParent = new TitleCellBean(annotation.parentName());
-							cellParent.setColumnIndex(++index);
+							cellParent = new TitleMeta(annotation.parentName());
+							cellParent.setValueType(annotation.type());
+							cellParent.setColumnIndex(annotation.column());
 							parentMap.put(annotation.parentName(), cellParent);
-							titleCellBeans.add(cellParent);
+							titleMetas.add(cellParent);
 						}
-						cell.setColumnIndex(++subIndex);
-						cell.setRowIndex(1);
+						cell.setColumnIndex(annotation.column());
+						cell.setRowIndex(annotation.row());
 						cellParent.addChildren(cell);
 						
-						titleRow = 2;
+						maxRow = annotation.row() > maxRow ? annotation.row() : maxRow;
 					}
 				}
 			}
 			
 		}
 		
-		//排序
-		Collections.sort(titleCellBeans, new Comparator<TitleCellBean>() {
-			@Override
-			public int compare(TitleCellBean o1, TitleCellBean o2) {
-				return o1.getColumnIndex() - o2.getColumnIndex();
-			}
-		});
 		
-		List<String> titleList = new ArrayList<>();
-        for (int i = 0; i < titleCellBeans.size(); i++) {
-        	if(titleCellBeans.get(i).getChildren().isEmpty()){
-        		titleList.add(titleCellBeans.get(i).getTitle());
-        	}else{
-        		List<TitleCellBean> children = titleCellBeans.get(i).getChildren();
-        		for (TitleCellBean titleCell : children) {
-        			titleList.add(titleCell.getTitle());
-				}
-        	}
-		}
         
-        titleRowCache.put(canonicalName, titleRow);
-        titleCellBeanCache.put(canonicalName, titleCellBeans);
-        titlesCache.put(canonicalName, titleList.toArray(new String[0]));
+        ExcelMeta excelMeta = new ExcelMeta(clazz,titleMetas,maxRow);
+        titleCellBeanCache.put(canonicalName, excelMeta);
 		aliasPropertyDescriptorCache.put(canonicalName, aliasMap);
 	}
 	
 	private static String clearWrapper(String orig){
-		return orig.replaceAll(ExcelValidator.QUOTE, "");
+		return orig;
 	}
 	
 	public static class BeanConverterException extends RuntimeException {
