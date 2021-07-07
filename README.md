@@ -1,127 +1,32 @@
-**黄金位置放个小广告→**欢迎加交流群：230192763 （不限于讨论该框架热爱技术就行）
+## 资源索引
+ - [快速开始](http://docs.jeesuite.com/guide/getting-started.html)
+ - [文档列表](http://docs.jeesuite.com/docments/)
+ - [集成项目](https://gitee.com/vakinge/oneplatform)，[github](https://github.com/vakinge/oneplatform)
+ 
 ## 简介
-**jeesuite-libs**是整理的近几年封装的一些基础组件包，计划陆续整理成一个java后台服务开发套件，包括整合dubbo服务化，rest API接口发布等。目前这些模块可用于生产环境，1.0版在千万级会员、日UV200万某互联网公司稳定运行。
+Jeesuite寓意为java企业级应用开发套件，定位是一站式分布式开发架构开源解决方案及快速开发平台。Jeesuite-libs为整体开发架构提供底层库支持。提供了数据库、缓存、消息中间件、分布式定时任务、SSO、文件服务、云存储等基础模块以及集成Dubbo、Spring Cloud底层支持。全部基于主流框架只做增强不做任何底层定制修改，每个组件可以独立使用。
 
-**原则**
-- 不造轮子、全部基于主流的框架如：mybatis、kafka、jedis等封装
-- 只做增强不修改依赖框架本身、可自由升级依赖框架版本
-- 封装的目标：更简单、更灵活。
+## 为什么有jeesuite-libs
+ - 一些框架使用起来比较复杂(譬如各种配置，各种资源管理，容错等)，针对这种情况我们做了大量二次封装旨在简化使用难度。
+ - 一些框架高度抽象貌似能满足所有应用场景，但是实际上大部分情况我们只用到了他10%的功能，结果她却只解决了我们90%的问题，针对这种情况我们就放弃使用而是参考他的设计自己实现一套简化版本
+ 
+## 重要的事情说三遍
+本项目底层框架库，直接跑不起来！所以不要问我怎么直接跑起来~所以不要问我怎么直接跑起来~所以不要问我怎么直接跑起来~。要运行可以关注集成演示项目：[https://gitee.com/vakinge/oneplatform](https://gitee.com/vakinge/oneplatform)
 
-**补充说明**
-- 类似于配置中心、定时任务为什么不集成成熟的同类框架如：disconf、elastic-job、xxl-job等呢？
-因为以上各种框架功能繁多、在这个功能上做的比较深入同时就带来了逻辑复杂、不便于自行定制修改、另外依赖包众多、让项目臃肿不堪。所以就自己开发
-类似功能、只做核心功能、让依赖和代码量尽量的少。
+## 愿景
+服务中小企业、减低架构成本、整体方案开箱即用。
+
+## 原则
+ - 只做增强不修改依赖框架本身，可自由升级版本。
+ - 持续更新、所有release版本经过严格测试和线上验证。
+ - 贴近业务场景、只做有用的功能。
+ - 高度灵活、每个模块可以独立使用。
 
 ---
-**release版已经上传maven中心仓库**
+## 版本
 * [sonatype](https://oss.sonatype.org/content/repositories/releases/com/jeesuite/) 
 * [http://mvnrepository.com/search?q=jeesuite](http://mvnrepository.com/search?q=jeesuite)
 
-## 总体功能模块图&roadmap
-![image](http://7xq7jj.com1.z0.glb.clouddn.com/jeesuite.png?1)
-
-## 技术栈（包括已实现和计划实现的部分）
-- 缓存：redis、ehcache、guava cache
-- 数据库:mysql、mybatis
-- 消息系统：kafka
-- rest：jesery、Jackson
-- 定时任务：zookeepr、quartz
-- 文件服务： qiniu、fastFDS、netty
-- 基础应用框架：spring、dubbo
-- 日志：log4j2、kafka、flume、elasticsearch、kibana，spark
-- 性能监控：
-  1. Pinpoint
-  2. [jeesuite-monitor](http://git.oschina.net/vakinge/jeesuite-monitor) `(轻量级方案)`
-- 链路跟踪：Zipkin/brave 
-- API网关：
-  1. kong
-  2. [jeesuite-apikeeper](http://git.oschina.net/vakinge/jeesuite-apikeeper) `(轻量级方案)`
-
-## 文档
-* [jeesuite-common2](http://git.oschina.net/vakinge/jeesuite-libs/blob/master/docs/common.md)
-* [jeesuite-common2](http://git.oschina.net/vakinge/jeesuite-libs/blob/master/docs/common2.md)
-* [jeesuite-kafka](http://git.oschina.net/vakinge/jeesuite-libs/blob/master/docs/kafka.md) 
-* [jeesuite-cache](http://git.oschina.net/vakinge/jeesuite-libs/blob/master/docs/cache.md) 
-* [jeesuite-scheduler](http://git.oschina.net/vakinge/jeesuite-libs/blob/master/docs/scheduler.md)
-* [jeesuite-mybatis](http://git.oschina.net/vakinge/jeesuite-libs/blob/master/docs/mybatis.md) 
-* [jeesuite-rest](http://git.oschina.net/vakinge/jeesuite-libs/blob/master/docs/rest.md) 
-* [jeesuite-confcenter](http://git.oschina.net/vakinge/jeesuite-libs/blob/master/docs/confcenter.md)
-* [jeesuite-filesystem](http://git.oschina.net/vakinge/jeesuite-libs/blob/master/docs/filesystem.md)
-* [jeesuite-log](http://git.oschina.net/vakinge/jeesuite-libs/blob/master/docs/log.md)
-
---- 
-## 计划
-#### cache模块（1.0.3） 
-- sentinel模式支持读写分离
-- 应用级namespace支持
-- 对象压缩
-
-#### confcenter（1.0.1） 
-- 基于ZK配置更新通知
-
-#### rest模块  (1.0.1)
-- 自定义异常处理支持
-- 日志统一采集支持
-
----
-
-## 功能列表
-#### kafka模块 (1.0.2)
-- 基于spring封装简化配置和调用方式
-- 基于配置新旧两版Consumer API兼容支持
-- 支持二阶段处理，即：fetch线程同步处理和process线程异步处理
-- 消费成功业务处理失败自动重试或自定义重试支持
-- process线程池采用`LinkedTransferQueue`，支持线程回收和队列大小限制，确保系统崩溃等不会有数据丢失。
-- 支持特殊场景发送有状态的消息（如：同一个用户的消息全部由某一个消费节点处理）
-- producer、consumer端监控数据采集，由（[jeesuite-admin](http://git.oschina.net/vakinge/jeesuite-admin)）输出
-- 兼容遗留kafka系统、支持发送和接收无封装的消息
-
-#### cache模块 (1.0.2)
-- 基于配置支持单机、哨兵、分片、集群模式自由切换
-- 更加简单的操作API封装
-- 一级缓存支持（ehcache & guava cache）、分布式场景多节点自动通知
-- 多组缓存配置同时支持 （一个应用多个redis server）
-- 分布式模式开关
-
-#### mybatis模块 (1.0.3)
-- 代码生成、自动CRUD、可无缝对接mybaits增强框架Mapper
-- 基于properties配置多数据源支持，无需修改XML
-- 读写分离，强制读主库等
-- 基于注解自动缓存管理（所有查询方法结果自动缓存、自动更新，事务回滚缓存同步回滚机制）
-- 简单分库路由（不支持join等跨库操作）
-
-#### scheduler模块 (1.0.6)
-- 支持分布式保证单节点执行（按节点平均分配job）
-- 支持failvoer，自动切换故障节点
-- 支持多节点下并行计算
-- 支持无注册中心单机模式
-- 支持自定义重试策略
-- 支持配置持久化（启动加载、变更保存）
-- 支持控制台（[jeesuite-admin](http://git.oschina.net/vakinge/jeesuite-admin)）任务监控、开停、动态修改调度时间策略、手动触发执行
-
-#### confcenter模块  (1.0.0)
-- 应用启动加载远程配置
-- 多环境多应用版本支持
-- 本地远程配置自由切换
-- 应用私有配置、全局配置同步支持
-
-#### rest模块  (1.0.1)
-- 自动resonse封装（xml、json）
-- i18n
-- request、response日志记录
-- 自动友好错误
-- 校验框架
-
-#### common2模块  (1.0.0)
-- 分布式锁
-- 分布式全局ID生成器
-- excel导入导出（支持大文件操作）
-
-#### filesystem模块  (1.0.0)
-- 七牛文件服务支持
-- fastDFS文件系统支持
-- 支持spring集成
-
----
-### 你可以下载集成了所有模块的demo[jeesuite-demo](http://git.oschina.net/vakinge/jeesuite-demo) 
-### jeesuite统一管理平台[jeesuite-admin](http://git.oschina.net/vakinge/jeesuite-admin) 
+## 微信交流群(如果群二维码过期，请先加作者微信[图2])
+<img src="https://jeesuite.oss-cn-guangzhou.aliyuncs.com/weixin_group_qrcode.jpg" width="180" height="180" />
+<img src="https://jeesuite.oss-cn-guangzhou.aliyuncs.com/weixin_qrcode.jpeg" width="180" height="180" />

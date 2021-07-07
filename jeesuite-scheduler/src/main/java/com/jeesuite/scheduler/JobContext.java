@@ -9,8 +9,11 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import com.jeesuite.common.util.NodeNameHolder;
+import com.jeesuite.common.util.ResourceUtils;
 import com.jeesuite.scheduler.helper.ConsistencyHash;
 import com.jeesuite.scheduler.registry.NullJobRegistry;
 
@@ -27,15 +30,17 @@ public class JobContext {
 	
 	private ConsistencyHash hash = new ConsistencyHash();
 	
+	private String groupName;
+	
 	private Map<String, AbstractJob> allJobs = new HashMap<>();
 	
-	private ConfigPersistHandler configPersistHandler;
+	private PersistHandler persistHandler;
 	
 	private TaskRetryProcessor retryProcessor;
-	
-	private JobLogPersistHandler jobLogPersistHandler;
-	
+		
 	private JobRegistry registry;
+	
+	private ExecutorService syncExecutor = Executors.newFixedThreadPool(1);
 	
 	public void startRetryProcessor(){
 		if(retryProcessor == null){
@@ -50,24 +55,24 @@ public class JobContext {
 		return context;
 	}
 
+	public String getGroupName() {
+		return groupName;
+	}
+
+	public void setGroupName(String groupName) {
+		this.groupName = groupName;
+	}
+
 	public String getNodeId() {
 		return NodeNameHolder.getNodeId();
 	}
 	
-	public ConfigPersistHandler getConfigPersistHandler() {
-		return configPersistHandler;
+	public PersistHandler getPersistHandler() {
+		return persistHandler;
 	}
 
-	public void setConfigPersistHandler(ConfigPersistHandler configPersistHandler) {
-		this.configPersistHandler = configPersistHandler;
-	}
-
-	public JobLogPersistHandler getJobLogPersistHandler() {
-		return jobLogPersistHandler;
-	}
-
-	public void setJobLogPersistHandler(JobLogPersistHandler jobLogPersistHandler) {
-		this.jobLogPersistHandler = jobLogPersistHandler;
+	public void setPersistHandler(PersistHandler persistHandler) {
+		this.persistHandler = persistHandler;
 	}
 
 	public JobRegistry getRegistry() {
@@ -78,6 +83,9 @@ public class JobContext {
 	}
 
 	public void setRegistry(JobRegistry registry) {
+		if(ResourceUtils.getBoolean("jeesuite.task.registry.disabled", false)){
+        	return;
+        }
 		this.registry = registry;
 	}
 
@@ -122,10 +130,23 @@ public class JobContext {
 		return activeNodes;
 	}
 	
+	public ExecutorService getSyncExecutor() {
+		return syncExecutor;
+	}
+
+	public void submitSyncTask(Runnable task){
+		syncExecutor.execute(task);
+	}
+	
 	public void close(){
 		if(retryProcessor != null){
 			retryProcessor.close();
 		}
+		if(persistHandler != null){
+			persistHandler.close();
+		}
+		syncExecutor.shutdown();
 	}
+	
 
 }

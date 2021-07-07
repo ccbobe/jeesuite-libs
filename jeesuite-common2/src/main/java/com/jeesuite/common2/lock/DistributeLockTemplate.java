@@ -3,6 +3,8 @@
  */
 package com.jeesuite.common2.lock;
 
+import com.jeesuite.common2.lock.redis.RedisDistributeLock;
+
 /**
  * @description <br>
  * @author <a href="mailto:vakinge@gmail.com">vakin</a>
@@ -10,7 +12,7 @@ package com.jeesuite.common2.lock;
  */
 public class DistributeLockTemplate {
 
-	private static final long _DEFAULT_LOCK_HOLD_MILLS = 30000;
+	private static final int _DEFAULT_LOCK_HOLD_MILLS = 30;
 	
 	
 	public static <T> T execute(String lockId,LockCaller<T> caller){
@@ -20,30 +22,23 @@ public class DistributeLockTemplate {
 	/**
 	 * @param lockId 要确保不和其他业务冲突（不能用随机生成）
 	 * @param caller 业务处理器
-	 * @param timeout 超时时间（毫秒）
+	 * @param timeout 超时时间（秒）
 	 * @return
 	 */
-	public static <T> T execute(String lockId,LockCaller<T> caller,long timeout){
-		DistributeLock dLock = new DistributeLock(lockId);
-		if(dLock.lock(timeout)){
-			try {				
+	public static <T> T execute(String lockId,LockCaller<T> caller,int timeout){
+		RedisDistributeLock dLock = new RedisDistributeLock(lockId,(int)timeout/1000);
+		
+		boolean getLock = false;
+		try {
+			if(dLock.tryLock()){
+				getLock = true;
 				return caller.onHolder();
-			} finally {
-				dLock.unlock();
+			}else{
+				return caller.onWait();
 			}
-		}else{
-			long start = System.currentTimeMillis();
-			T result = null;
-			while(true){
-				try {Thread.sleep(100);} catch (Exception e) {}
-				if(!dLock.isLocked()){					
-					result = caller.onWait();
-					if(result != null)return result;
-				}
-				if(System.currentTimeMillis() - start > timeout){
-					throw new RuntimeException("DistributeLock["+lockId+"] wait timeout");
-				}
-			}
+		} finally {
+			if(getLock)dLock.unlock();
 		}
+		
 	}
 }

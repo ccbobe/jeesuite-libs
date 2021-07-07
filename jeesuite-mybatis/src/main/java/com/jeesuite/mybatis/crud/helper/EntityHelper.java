@@ -27,6 +27,8 @@ public class EntityHelper {
      * 缓存TableMapper
      */
     private final static Map<Class<?>, EntityMapper> tableMapperCache = new HashMap<Class<?>, EntityMapper>();
+    private final static Map<String, Map<String, Field>> entityFieldMappings = new HashMap<>();
+    private final static Map<String, List<ColumnMapper>> tableColumnMappings = new HashMap<>();
 
     /**
      * 由传入的实体的class构建TableMapper对象，构建好的对象存入缓存中，以后使用时直接从缓存中获取
@@ -58,6 +60,7 @@ public class EntityHelper {
             ColumnMapper idColumn = null;
             GenerationType idStrategy = null;
 
+            Map<String, Field> map = new HashMap<>();
             for (Field field : fields) {
 
                 // 排除字段
@@ -93,13 +96,18 @@ public class EntityHelper {
                 }
                 // 添加到所有字段映射信息
                 columnMapperSet.add(columnMapper);
-
+                //
+                field.setAccessible(true);
+                map.put(field.getName(), field);
             }
+            
+            entityFieldMappings.put(tableMapper.getName(), map);
+            
             if (columnMapperSet.size() <= 0) {
                 throw new RuntimeException("实体" + entityClass.getName() + "不存在映射字段");
             }
             if (idColumn == null) {
-                throw new RuntimeException("实体" + entityClass.getName() + "不存在主键或者");
+                throw new RuntimeException("实体" + entityClass.getName() + "不存在主键");
             }
 
             // 解析实体映射信息
@@ -111,9 +119,14 @@ public class EntityHelper {
             entityMapper.setIdStrategy(idStrategy);
 
             tableMapperCache.put(entityClass, entityMapper);
-
+            //
+            tableColumnMappings.put(tableMapper.getName().toLowerCase(), new ArrayList<>(columnMapperSet));
             return entityMapper;
         }
+    }
+    
+    public static List<ColumnMapper> getTableColumnMappers(String tableName){
+    	return tableColumnMappings.get(tableName.toLowerCase());
     }
 
     /**
@@ -230,5 +243,9 @@ public class EntityHelper {
             return getAllField(entityClass.getSuperclass(), fieldList);
         }
         return fieldList;
+    }
+    
+    public static Field getEntityField(String tableName,String fieldName){
+    	return entityFieldMappings.get(tableName).get(fieldName);
     }
 }

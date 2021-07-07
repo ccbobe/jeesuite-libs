@@ -5,13 +5,17 @@ package com.jeesuite.filesystem.spring;
 
 import java.io.File;
 import java.io.InputStream;
+import java.util.Map;
+import java.util.Properties;
 
 import org.apache.commons.lang3.Validate;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.InitializingBean;
 
 import com.jeesuite.filesystem.FSProvider;
-import com.jeesuite.filesystem.FileType;
+import com.jeesuite.filesystem.UploadObject;
+import com.jeesuite.filesystem.UploadTokenParam;
+import com.jeesuite.filesystem.provider.aliyun.AliyunossProvider;
 import com.jeesuite.filesystem.provider.fdfs.FdfsProvider;
 import com.jeesuite.filesystem.provider.qiniu.QiniuProvider;
 
@@ -23,6 +27,7 @@ import com.jeesuite.filesystem.provider.qiniu.QiniuProvider;
 public class FSProviderSpringFacade implements InitializingBean,DisposableBean{
 
 	private FSProvider fsProvider;
+	String endpoint;
 	String provider;
 	String groupName;
 	String accessKey;
@@ -31,9 +36,11 @@ public class FSProviderSpringFacade implements InitializingBean,DisposableBean{
 	String servers;
 	long connectTimeout = 3000;
 	int maxThreads = 50;
+	boolean privated;
 
-	public void setFsProvider(FSProvider fsProvider) {
-		this.fsProvider = fsProvider;
+
+	public void setEndpoint(String endpoint) {
+		this.endpoint = endpoint;
 	}
 
 	public void setProvider(String provider) {
@@ -60,6 +67,10 @@ public class FSProviderSpringFacade implements InitializingBean,DisposableBean{
 		this.servers = servers;
 	}
 	
+	public void setPrivated(boolean privated) {
+		this.privated = privated;
+	}
+
 	@Override
 	public void destroy() throws Exception {
 		fsProvider.close();
@@ -67,44 +78,38 @@ public class FSProviderSpringFacade implements InitializingBean,DisposableBean{
 
 	@Override
 	public void afterPropertiesSet() throws Exception {
-		if(!QiniuProvider.NAME.equals(provider) && !FdfsProvider.NAME.equals(provider)){
-     	   throw new RuntimeException("Provider[" + provider + "] not support");
-		}
-		
+
 		if(QiniuProvider.NAME.equals(provider)){
 			Validate.notBlank(accessKey, "[accessKey] not defined");
 			Validate.notBlank(secretKey, "[secretKey] not defined");
-			fsProvider = new QiniuProvider(urlprefix, groupName, accessKey, secretKey);
+			fsProvider = new QiniuProvider(urlprefix, groupName, accessKey, secretKey,privated);
 		}else if(FdfsProvider.NAME.equals(provider)){
 			Validate.isTrue(servers != null && servers.matches("^.+[:]\\d{1,5}\\s*$"),"[servers] is not valid");
-			String[] serversArray = servers.split(",|;");
-			fsProvider = new FdfsProvider(urlprefix, groupName, serversArray, connectTimeout, maxThreads);
+			Properties properties = new Properties();
+			fsProvider = new FdfsProvider(groupName,properties);
+		}else if(AliyunossProvider.NAME.equals(provider)){
+			Validate.notBlank(endpoint, "[endpoint] not defined");
+			
+		}else{
+			throw new RuntimeException("Provider[" + provider + "] not support");
 		}
 	}
 
-	public String upload(String catalog, String fileName, File file) {
-		return fsProvider.upload(catalog, fileName, file);
-	}
-
-	public String upload(String catalog, String fileName, byte[] data, FileType fileType) {
-		return fsProvider.upload(catalog, fileName, data, fileType);
+	public String upload(String fileName, File file) {
+		return fsProvider.upload(new UploadObject(fileName, file));
 	}
 
 
-	public String upload(String catalog, String fileName, InputStream in, FileType fileType) {
-		return fsProvider.upload(catalog, fileName, in, fileType);
-	}
-
-	public String upload(String catalog, String fileName, String remoteUrl) {
-		return fsProvider.upload(catalog, fileName, remoteUrl);
+	public String upload(String fileName, InputStream in, String mimeType) {
+		return fsProvider.upload(new UploadObject(fileName, in, mimeType));
 	}
 
 	public boolean delete(String fileName) {
 		return fsProvider.delete(fileName);
 	}
 
-	public String createUploadToken(String... fileNames) {
-		return fsProvider.createUploadToken(fileNames);
+	public Map<String, Object> createUploadToken(UploadTokenParam param) {
+		return fsProvider.createUploadToken(param);
 	}
 
 	public void setConnectTimeout(long connectTimeout) {

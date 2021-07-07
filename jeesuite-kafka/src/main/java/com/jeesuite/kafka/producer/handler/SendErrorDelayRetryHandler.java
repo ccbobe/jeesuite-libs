@@ -17,8 +17,8 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.jeesuite.common.async.StandardThreadExecutor.StandardThreadFactory;
 import com.jeesuite.kafka.message.DefaultMessage;
-import com.jeesuite.kafka.thread.StandardThreadExecutor.StandardThreadFactory;
 
 /**
  * @description <br>
@@ -43,14 +43,18 @@ public class SendErrorDelayRetryHandler implements ProducerEventHandler{
 		this.topicProducer = topicProducer;
 		this.retries = retries;
 		executor = Executors.newFixedThreadPool(1, new StandardThreadFactory("ErrorMessageProcessor"));
-		executor.submit(new Runnable() {
+		executor.execute(new Runnable() {
 			@Override
 			public void run() {
 				long currentTimeMillis = System.currentTimeMillis();
 				while(true){
 					try {
 						PriorityTask task = taskQueue.take();
+						//空任务跳出循环
+						if(task.message == null)break;
 						if(task.nextFireTime < currentTimeMillis){
+							//重新放回去
+							taskQueue.add(task);
 							TimeUnit.MILLISECONDS.sleep(100);
 							continue;
 						}
@@ -65,10 +69,7 @@ public class SendErrorDelayRetryHandler implements ProducerEventHandler{
 	public void onSuccessed(String topicName, RecordMetadata metadata) {}
 
 	@Override
-	public void onError(String topicName, DefaultMessage message, boolean isAsynSend) {
-		if(isAsynSend == false){
-			return;
-		}
+	public void onError(String topicName, DefaultMessage message) {
 		//在重试队列不处理
 		if(messageIdsInQueue.contains(message.getMsgId()))return;
 		//
@@ -78,7 +79,14 @@ public class SendErrorDelayRetryHandler implements ProducerEventHandler{
 	
 	@Override
 	public void close() throws IOException {
-		executor.shutdownNow();
+		// taskQueue里面没有任务会一直阻塞，所以先add一个新任务保证执行
+		taskQueue.add(new PriorityTask(null, null));
+		try {
+			Thread.sleep(1000);
+		} catch (Exception e) {
+		}
+		executor.shutdown();
+		logger.info("KAFKA producer SendErrorDelayRetryHandler closed");
 	}
 	
 	class PriorityTask implements Runnable,Comparable<PriorityTask>{
@@ -104,7 +112,7 @@ public class SendErrorDelayRetryHandler implements ProducerEventHandler{
 		public void run() {
 			try {	
 				logger.debug("begin re process message:"+this.toString());
-				Object sendContent = message.isSendBodyOnly() ? message.getBody() : message;
+				Object sendContent = message.sendBodyOnly() ? message.getBody() : message;
 				topicProducer.send(new ProducerRecord<String, Object>(topicName, message.getMsgId(),sendContent));
 				//处理成功移除
 				messageIdsInQueue.remove(message.getMsgId());

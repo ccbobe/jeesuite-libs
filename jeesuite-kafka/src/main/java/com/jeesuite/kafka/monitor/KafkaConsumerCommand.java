@@ -3,6 +3,7 @@
  */
 package com.jeesuite.kafka.monitor;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -16,6 +17,8 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.jeesuite.common.json.JsonUtils;
 import com.jeesuite.kafka.monitor.model.ConsumerGroupInfo;
@@ -23,8 +26,9 @@ import com.jeesuite.kafka.monitor.model.TopicInfo;
 import com.jeesuite.kafka.monitor.model.TopicPartitionInfo;
 
 import kafka.admin.AdminClient;
+import kafka.admin.AdminClient.ConsumerGroupSummary;
 import kafka.admin.AdminClient.ConsumerSummary;
-import kafka.coordinator.GroupOverview;
+import kafka.coordinator.group.GroupOverview;
 import scala.collection.Iterator;
 
 /**
@@ -33,8 +37,11 @@ import scala.collection.Iterator;
  * @date 2016年12月8日
  */
 public class KafkaConsumerCommand {
+	
+	private static final Logger logger = LoggerFactory.getLogger(KafkaConsumerCommand.class);
 
-	private Map<String, KafkaConsumer<String, String>> kafkaConsumers = new HashMap<>();
+
+	private Map<String, KafkaConsumer<String, Serializable>> kafkaConsumers = new HashMap<>();
 	private AdminClient adminClient;
 	private String bootstrapServer;
 
@@ -49,8 +56,9 @@ public class KafkaConsumerCommand {
 		List<ConsumerGroupInfo> consumerGroups = new ArrayList<>();
 		List<String> groupIds = group();
 		for (String groupId : groupIds) {
-			KafkaConsumer<String, String> consumer = getConsumer(groupId);
-			consumerGroups.add(consumerGroup(consumer,groupId));
+			ConsumerGroupInfo consumerGroup = consumerGroup(groupId);
+			if(consumerGroup == null)continue;
+			consumerGroups.add(consumerGroup);
 		}
 		return consumerGroups;
 	}
@@ -67,8 +75,15 @@ public class KafkaConsumerCommand {
 		return groups;
 	}
 	
-	protected ConsumerGroupInfo consumerGroup(KafkaConsumer<String, String> kafkaConsumer,String group){
-		scala.collection.immutable.List<ConsumerSummary> consumers = adminClient.describeConsumerGroup(group);
+	public ConsumerGroupInfo consumerGroup(String group){
+		KafkaConsumer<String, Serializable> kafkaConsumer = getConsumer(group);
+		return consumerGroup(kafkaConsumer,group);
+	}
+	
+	public ConsumerGroupInfo consumerGroup(KafkaConsumer<String, Serializable> kafkaConsumer,String group){
+		
+		ConsumerGroupSummary groupSummary = adminClient.describeConsumerGroup(group,30000);
+		scala.collection.immutable.List<ConsumerSummary> consumers = groupSummary.consumers().get();
 		if(consumers.isEmpty()){
 			System.out.println("Consumer group ["+group+"] does not exist or is rebalancing.");
 			return null;
@@ -83,34 +98,43 @@ public class KafkaConsumerCommand {
 			if(!consumerGroup.getClusterNodes().contains(consumer.clientId())){
 				consumerGroup.getClusterNodes().add(consumer.clientId());
 			}
-			String owner = consumer.clientId() + consumer.clientHost();
+			String owner = consumer.clientId() + consumer.host();
 			scala.collection.immutable.List<TopicPartition> partitions = consumer.assignment();
 			Iterator<TopicPartition> iterator2 = partitions.iterator();
 			
 			Map<String, TopicInfo> topicInfos = new HashMap<>();
 			while (iterator2.hasNext()) {
+				
 				TopicPartition partition = iterator2.next();
-				
-				TopicInfo topicInfo = topicInfos.get(partition.topic());
-				if(topicInfo == null){					
-					topicInfos.put(partition.topic(), topicInfo = new TopicInfo(partition.topic()));
-					consumerGroup.getTopics().add(topicInfo);
+                try {
+                	TopicInfo topicInfo = topicInfos.get(partition.topic());
+    				if(topicInfo == null){					
+    					topicInfos.put(partition.topic(), topicInfo = new TopicInfo(partition.topic()));
+    					consumerGroup.getTopics().add(topicInfo);
+    				}
+    				OffsetAndMetadata metadata = kafkaConsumer.committed(new TopicPartition(partition.topic(), partition.partition()));
+    				if(metadata == null)continue;
+    				TopicPartitionInfo partitionInfo = new TopicPartitionInfo(partition.topic(), partition.partition(),metadata.offset(),owner);
+    				//
+    				long logSize = getLogSize(kafkaConsumer,partition.topic(), partition.partition());
+    				partitionInfo.setLogSize(logSize);
+    				topicInfo.getPartitions().add(partitionInfo);
+				} catch (Exception e) {
+					logger.warn("fetch_topic_info_error topic:"+partition.topic(), e);
 				}
-				OffsetAndMetadata metadata = kafkaConsumer.committed(new TopicPartition(partition.topic(), partition.partition()));
-				
-				TopicPartitionInfo partitionInfo = new TopicPartitionInfo(partition.topic(), partition.partition(),metadata.offset(),owner);
-				//
-				long logSize = getLogSize(kafkaConsumer,partition.topic(), partition.partition());
-				partitionInfo.setLogSize(logSize);
-				topicInfo.getPartitions().add(partitionInfo);
 			}
 		}
 		
 		return consumerGroup;
 		
 	}
+	
+	public void resetTopicOffsets(String groupId,String topic,int partition,long newOffsets){
+		KafkaConsumer<String, Serializable> kafkaConsumer = getConsumer(groupId);
+		kafkaConsumer.seek(new TopicPartition(topic, partition), newOffsets);
+	}
 
-	protected long getLogSize(KafkaConsumer<String, String> kafkaConsumer,String topic, int partition) {
+	protected long getLogSize(KafkaConsumer<String, Serializable> kafkaConsumer,String topic, int partition) {
 		TopicPartition topicPartition = new TopicPartition(topic, partition);
 		List<TopicPartition> asList = Arrays.asList(topicPartition);
 		kafkaConsumer.assign(asList);
@@ -119,9 +143,9 @@ public class KafkaConsumerCommand {
 		return logEndOffset;
 	}
 
-	private KafkaConsumer<String, String> getConsumer(String groupId) {
+	private KafkaConsumer<String, Serializable> getConsumer(String groupId) {
 		
-		KafkaConsumer<String, String> kafkaConsumer = null; 
+		KafkaConsumer<String, Serializable> kafkaConsumer = null; 
 		if ((kafkaConsumer = kafkaConsumers.get(groupId))!= null)
 			return kafkaConsumer;
 		
@@ -133,7 +157,7 @@ public class KafkaConsumerCommand {
 		properties.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
 		properties.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
 
-		kafkaConsumer = new KafkaConsumer<String, String>(properties);
+		kafkaConsumer = new KafkaConsumer<String, Serializable>(properties);
 		kafkaConsumers.put(groupId, kafkaConsumer);
 		return kafkaConsumer;
 
@@ -142,7 +166,7 @@ public class KafkaConsumerCommand {
 	public void close() {
 		adminClient.close();
 		if (kafkaConsumers != null){
-			for (KafkaConsumer<String, String> kafkaConsumer : kafkaConsumers.values()) {				
+			for (KafkaConsumer<String, Serializable> kafkaConsumer : kafkaConsumers.values()) {				
 				kafkaConsumer.close();
 			}
 		}

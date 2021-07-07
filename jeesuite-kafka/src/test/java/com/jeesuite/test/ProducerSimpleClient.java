@@ -1,5 +1,7 @@
 package com.jeesuite.test;
 
+import org.I0Itec.zkclient.ZkClient;
+import org.apache.commons.lang3.RandomStringUtils;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.BeansException;
@@ -23,9 +25,13 @@ public class ProducerSimpleClient implements ApplicationContextAware{
 	@Test
 	public void testPublish() throws InterruptedException{
         //默认模式（异步/ ）发送
-		for (int i = 0; i < 5; i++) {			
-			topicProducer.publish("demo-topic", new DefaultMessage("hello,man"));
-			topicProducer.publish("demo2-topic", new DefaultMessage("hello,women"));
+		for (int i = 0; i < 5; i++) {	
+			User user = new User();
+			user.setId(100+i);
+			user.setName("jack");
+			topicProducer.publish("app-union-logs", new DefaultMessage(JsonUtils.toJson(user)).sendBodyOnly(true));
+			//topicProducer.publish("demo-topic2", new DefaultMessage(user));
+			//topicProducer.publishNoWrapperMessage("streams-plaintext-input", "hello " + i);
 		}
 //		
 //		DefaultMessage msg = new DefaultMessage("hello,man")
@@ -41,6 +47,8 @@ public class ProducerSimpleClient implements ApplicationContextAware{
 //		user.setName("kafka");
 //		//异步发送
 //		topicProducer.publishNoWrapperMessage("demo-topic", JsonUtils.toJson(user),true);
+		
+		Thread.sleep(5000);
 				
 	}
 	
@@ -48,4 +56,8 @@ public class ProducerSimpleClient implements ApplicationContextAware{
 	@Override
 	public void setApplicationContext(ApplicationContext arg0) throws BeansException {}
 
+	public static void main(String[] args) {
+		ZkClient zkClient = new ZkClient("127.0.0.1:2181");
+		System.out.println(zkClient.exists("/aa"));
+	}
 }

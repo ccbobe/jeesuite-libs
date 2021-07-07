@@ -3,13 +3,14 @@
  */
 package com.jeesuite.cache.command;
 
+import static com.jeesuite.cache.redis.JedisProviderFactory.getBinaryJedisClusterCommands;
+import static com.jeesuite.cache.redis.JedisProviderFactory.getBinaryJedisCommands;
+import static com.jeesuite.cache.redis.JedisProviderFactory.getJedisProvider;
+import static com.jeesuite.cache.redis.JedisProviderFactory.isCluster;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
-
-import redis.clients.util.SafeEncoder;
-
-import static com.jeesuite.cache.redis.JedisProviderFactory.*;
 
 /**
  * redis操作可排序set
@@ -17,7 +18,7 @@ import static com.jeesuite.cache.redis.JedisProviderFactory.*;
  * @author <a href="mailto:vakinge@gmail.com">vakin</a>
  * @date 2015年12月7日
  */
-public class RedisSortSet extends RedisCollection {
+public class RedisSortSet extends RedisBinaryCollection {
 
 	public RedisSortSet(String key) {
 		super(key);
@@ -56,16 +57,16 @@ public class RedisSortSet extends RedisCollection {
 	 * @param value  元素
 	 * @return
 	 */
-	public boolean add(double score, Object value){
+	public long add(double score, Object value){
         try {   
-        	boolean result = false;
+        	long result = 0;
         	if(isCluster(groupName)){
-        		result = getBinaryJedisClusterCommands(groupName).zadd(key, score, valueSerialize(value)) >= 1;
+        		result = getBinaryJedisClusterCommands(groupName).zadd(keyBytes, score, valueSerialize(value));
         	}else{
-        		result = getBinaryJedisCommands(groupName).zadd(key, score, valueSerialize(value)) >= 1;
+        		result = getBinaryJedisCommands(groupName).zadd(keyBytes, score, valueSerialize(value));
         	}
         	//设置超时时间
-        	if(result)setExpireIfNot(expireTime);
+        	if(result > 0)setExpireIfNot(expireTime);
 			return result;
     	} finally{
 			getJedisProvider(groupName).release();
@@ -81,9 +82,9 @@ public class RedisSortSet extends RedisCollection {
         try {   
         	boolean result = false;
         	if(isCluster(groupName)){
-        		result = getBinaryJedisClusterCommands(groupName).zrem(key,valueSerialize(mem)) >= 1;
+        		result = getBinaryJedisClusterCommands(groupName).zrem(keyBytes,valueSerialize(mem)) >= 1;
         	}else{
-        		result = getBinaryJedisCommands(groupName).zrem(key,valueSerialize(mem)) >= 1;
+        		result = getBinaryJedisCommands(groupName).zrem(keyBytes,valueSerialize(mem)) >= 1;
         	}
 			return result;
     	} finally{
@@ -98,9 +99,9 @@ public class RedisSortSet extends RedisCollection {
         try {   
         	long count = 0;
         	if(isCluster(groupName)){
-        		count = getBinaryJedisClusterCommands(groupName).zcard(key);
+        		count = getBinaryJedisClusterCommands(groupName).zcard(keyBytes);
         	}else{
-        		count = getBinaryJedisCommands(groupName).zcard(key);
+        		count = getBinaryJedisCommands(groupName).zcard(keyBytes);
         	}
 			return count;
     	} finally{
@@ -123,13 +124,13 @@ public class RedisSortSet extends RedisCollection {
      * @param end
      * @return
      */
-    public <T> List<T> range(int start,int end){
+    public <T> List<T> range(long start,long end){
     	Set<byte[]> result = null;
         try {    		
         	if(isCluster(groupName)){
-        		result = getBinaryJedisClusterCommands(groupName).zrange(key, start, end);
+        		result = getBinaryJedisClusterCommands(groupName).zrange(keyBytes, start, end);
         	}else{
-        		result = getBinaryJedisCommands(groupName).zrange(key, start, end);
+        		result = getBinaryJedisCommands(groupName).zrange(keyBytes, start, end);
         	}
         	return toObjectList(new ArrayList<>(result));
     	} finally{
@@ -137,17 +138,69 @@ public class RedisSortSet extends RedisCollection {
 		}
 	}
     
-    public boolean removeByScore(long min,long max){
-        try {   
-        	boolean result = false;
-        	byte[] start = SafeEncoder.encode(String.valueOf(min));
-        	byte[] end = SafeEncoder.encode(String.valueOf(max));
+    /**
+     * 按指定权重取出元素列表
+     * @param start
+     * @param end
+     * @return
+     */
+    public <T> List<T> getByScore(double min,double max){
+    	Set<byte[]> result = null;
+        try {    		
         	if(isCluster(groupName)){
-        		result = getBinaryJedisClusterCommands(groupName).zremrangeByScore(key, start, end) >= 1;
+        		result = getBinaryJedisClusterCommands(groupName).zrangeByScore(keyBytes, min, max);
         	}else{
-        		result = getBinaryJedisCommands(groupName).zremrangeByScore(key, start, end) >= 1;
+        		result = getBinaryJedisCommands(groupName).zrangeByScore(keyBytes, min, max);
+        	}
+        	return toObjectList(new ArrayList<>(result));
+    	} finally{
+			getJedisProvider(groupName).release();
+		}
+	}
+    
+    /**
+     * 按权重删除
+     * @param min
+     * @param max
+     * @return
+     */
+    public long removeByScore(double min,double max){
+        try {   
+        	long result = 0;
+        	if(isCluster(groupName)){
+        		result = getBinaryJedisClusterCommands(groupName).zremrangeByScore(keyBytes, min, max);
+        	}else{
+        		result = getBinaryJedisCommands(groupName).zremrangeByScore(keyBytes, min, max);
         	}
 			return result;
+    	} finally{
+			getJedisProvider(groupName).release();
+		}
+	}
+    
+    public double getScore(String value){
+        try {   
+        	Double result;
+        	if(isCluster(groupName)){
+        		result = getBinaryJedisClusterCommands(groupName).zscore(keyBytes, valueSerialize(value));
+        	}else{
+        		result = getBinaryJedisCommands(groupName).zscore(keyBytes, valueSerialize(value)); 
+        	}
+			return result == null ?  -1 : result;
+    	} finally{
+			getJedisProvider(groupName).release();
+		}
+	}
+    
+    public long countByScore(double min,double max){
+    	Long result = null;
+        try {    		
+        	if(isCluster(groupName)){
+        		result = getBinaryJedisClusterCommands(groupName).zcount(keyBytes, min, max);
+        	}else{
+        		result = getBinaryJedisCommands(groupName).zcount(keyBytes, min, max);
+        	}
+        	return result == null ? 0 : result.longValue();
     	} finally{
 			getJedisProvider(groupName).release();
 		}

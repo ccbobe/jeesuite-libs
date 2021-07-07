@@ -15,6 +15,7 @@ import org.springframework.beans.factory.InitializingBean;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.util.StringUtils;
 
+import com.jeesuite.common.util.ResourceUtils;
 import com.jeesuite.spring.InstanceFactory;
 
 import redis.clients.jedis.Jedis;
@@ -141,6 +142,7 @@ public class Level1CacheSupport implements InitializingBean, DisposableBean{
 				if(subJedisClient == null){
 					try {
 						subJedisClient = new Jedis(host, port);
+						if(password != null)subJedisClient.auth(password);
 						if("PONG".equals(subJedisClient.ping())){							
 							logger.info("subscribe localCache sync channel.....");
 							subJedisClient.subscribe(listener, new String[]{channelName});
@@ -186,6 +188,7 @@ public class Level1CacheSupport implements InitializingBean, DisposableBean{
 	}
 
 	public void setPassword(String password) {
+		if(ResourceUtils.NULL_VALUE_PLACEHOLDER.equals(password))return;
 		this.password = password;
 	}
 

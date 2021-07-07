@@ -3,10 +3,15 @@
  */
 package com.jeesuite.test.sch;
 
-import org.apache.commons.lang3.RandomUtils;
+import java.util.Date;
 
+import org.apache.commons.lang3.RandomUtils;
+import org.springframework.stereotype.Service;
+
+import com.jeesuite.common.util.DateUtils;
 import com.jeesuite.scheduler.AbstractJob;
 import com.jeesuite.scheduler.JobContext;
+import com.jeesuite.scheduler.annotation.ScheduleConf;
 
 /**
  * @description <br>
@@ -14,14 +19,14 @@ import com.jeesuite.scheduler.JobContext;
  * @date 2016年1月28日
  * @Copyright (c) 2015, lifesense.com
  */
+@Service
+@ScheduleConf(cronExpr="0/30 * * * * ?",jobName="demoTask",executeOnStarted = true)
 public class DemoTask extends AbstractJob{
 
-	int count = 1;
 	@Override
 	public void doJob(JobContext context) throws Exception {
-		System.out.println("\n=============\nDemoTask1=====>"+count+"\n===============\n");
+		System.out.println("\n=============\nDemoTask_1=====>"+context.getNodeId()+"--"+DateUtils.format(new Date())+"\n===============\n");
 		Thread.sleep(RandomUtils.nextLong(1000, 2000));
-		count++;
 	}
 
 	@Override

@@ -20,6 +20,7 @@ import org.springframework.util.StringUtils;
 import com.jeesuite.cache.redis.cluster.JedisClusterProvider;
 import com.jeesuite.cache.redis.sentinel.JedisSentinelProvider;
 import com.jeesuite.cache.redis.standalone.JedisStandaloneProvider;
+import com.jeesuite.common.util.ResourceUtils;
 import com.jeesuite.spring.InstanceFactory;
 import com.jeesuite.spring.SpringInstanceProvider;
 
@@ -56,6 +57,7 @@ public class JedisProviderFactoryBean implements ApplicationContextAware,Initial
 	private int database = Protocol.DEFAULT_DATABASE;
 	private String masterName;
 	private String clientName;
+	private boolean tenantModeEnabled;
 	
 	private ApplicationContext context;
 
@@ -86,6 +88,7 @@ public class JedisProviderFactoryBean implements ApplicationContextAware,Initial
 	
 	
 	public void setPassword(String password) {
+		if(ResourceUtils.NULL_VALUE_PLACEHOLDER.equals(password))return;
 		this.password = password;
 	}
 
@@ -99,6 +102,10 @@ public class JedisProviderFactoryBean implements ApplicationContextAware,Initial
 
 	public void setClientName(String clientName) {
 		this.clientName = clientName;
+	}
+
+	public void setTenantModeEnabled(boolean tenantModeEnabled) {
+		this.tenantModeEnabled = tenantModeEnabled;
 	}
 
 	@Override
@@ -169,6 +176,8 @@ public class JedisProviderFactoryBean implements ApplicationContextAware,Initial
 		if(JedisSentinelProvider.MODE.equalsIgnoreCase(mode)){
 			beanDefinitionBuilder.addConstructorArgValue(masterName);
 		}
+		
+		beanDefinitionBuilder.addPropertyValue("tenantModeEnabled", tenantModeEnabled);
 		
 		acf.registerBeanDefinition(beanName, beanDefinitionBuilder.getRawBeanDefinition());
 		//

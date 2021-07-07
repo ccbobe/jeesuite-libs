@@ -4,24 +4,21 @@
 package com.jeesuite.scheduler.registry;
 
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
-import com.jeesuite.scheduler.JobRegistry;
+import com.google.common.eventbus.Subscribe;
 import com.jeesuite.scheduler.model.JobConfig;
+import com.jeesuite.scheduler.monitor.MonitorCommond;
 
 /**
  * @description <br>
  * @author <a href="mailto:vakinge@gmail.com">vakin</a>
  * @date 2016年12月16日
  */
-public class NullJobRegistry implements JobRegistry {
+public class NullJobRegistry extends AbstarctJobRegistry {
 
-	private Map<String, JobConfig> schedulerConfgs = new ConcurrentHashMap<>();
-
-	
 	@Override
 	public void register(JobConfig conf) {
 		schedulerConfgs.put(conf.getJobName(), conf);
@@ -47,6 +44,8 @@ public class NullJobRegistry implements JobRegistry {
 		JobConfig config = schedulerConfgs.get(jobName);
 		config.setRunning(false);
 		config.setNextFireTime(nextFireTime);
+		config.setModifyTime(Calendar.getInstance().getTimeInMillis());
+		config.setErrorMsg(e == null ? null : e.getMessage());
 	}
 
 	@Override
@@ -64,6 +63,14 @@ public class NullJobRegistry implements JobRegistry {
 	@Override
 	public List<JobConfig> getAllJobs() {
 		return new ArrayList<>(schedulerConfgs.values());
+	}
+
+	@Override
+	public void onRegistered() {}
+	
+	@Subscribe
+	public void processCommand(MonitorCommond cmd){
+		execCommond(cmd);
 	}
 
 }

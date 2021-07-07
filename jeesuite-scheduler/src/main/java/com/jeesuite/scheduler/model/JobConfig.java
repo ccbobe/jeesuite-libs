@@ -1,6 +1,7 @@
 package com.jeesuite.scheduler.model;
 
 import java.io.Serializable;
+import java.util.Calendar;
 import java.util.Date;
 
 import org.apache.commons.lang3.builder.ToStringBuilder;
@@ -148,7 +149,24 @@ public class JobConfig implements Serializable {
 		this.modifyTime = modifyTime;
 	}
 
+	private static long allowDeviation = 1000 * 60 * 10;
 	public String getErrorMsg() {
+		if(errorMsg == null){
+			if(lastFireTime != null && nextFireTime != null){
+				long interval = nextFireTime.getTime() - lastFireTime.getTime();
+				long nextFireTimeMils;
+				if(running){
+					nextFireTimeMils = lastFireTime.getTime() + interval;
+				}else{
+					nextFireTimeMils = nextFireTime.getTime();
+				}
+				if(Calendar.getInstance().getTimeInMillis() - nextFireTimeMils > (interval < allowDeviation ? interval : allowDeviation)){
+					errorMsg = "nextFireTime Abnormal";
+				}else{
+					errorMsg = "";
+				}
+			}
+		}
 		return errorMsg;
 	}
 

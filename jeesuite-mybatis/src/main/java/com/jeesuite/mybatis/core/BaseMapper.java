@@ -4,6 +4,14 @@
 package com.jeesuite.mybatis.core;
 
 import java.io.Serializable;
+import java.util.List;
+
+import org.apache.ibatis.annotations.ResultMap;
+import org.apache.ibatis.annotations.ResultType;
+import org.apache.ibatis.annotations.SelectProvider;
+
+import com.jeesuite.mybatis.crud.provider.CountByExampleProvider;
+import com.jeesuite.mybatis.crud.provider.SelectByExampleProvider;
 
 /**
  * @description <br>
@@ -17,19 +25,19 @@ public abstract interface BaseMapper<T extends BaseEntity, ID extends Serializab
      * 保存（持久化）对象
      * @param entity 要持久化的对象
      */
-	public void insert(T entity);
+	void insert(T entity);
 	
-	public void insertSelective(T entity);
+	void insertSelective(T entity);
 	
 	/**
 	  * @param entity
 	*/
-	public void updateByKey(T entity);
+	void updateByPrimaryKey(T entity);
 
 	/**
 	  * @param entity
 	*/
-	public void updateByKeySelective(T entity);
+	void updateByPrimaryKeySelective(T entity);
 	
 
     /**
@@ -38,8 +46,29 @@ public abstract interface BaseMapper<T extends BaseEntity, ID extends Serializab
      * @param id 指定的唯一标识符
      * @return 指定的唯一标识符对应的持久化对象，如果没有对应的持久化对象，则返回null。
      */
-	public T getByKey(ID id);
+	T selectByPrimaryKey(ID id);
+	
+	List<T> selectAll();
 
-	void deleteByKey(ID id);
+	void deleteByPrimaryKey(ID id);
+	
+	/**
+	 * 批量插入
+	 * @param entities
+	 */
+	void insertList(List<T> entities);
+	
+	long countAll();
+	
+	List<T> selectByPrimaryKeys(List<ID> ids);
+	
+	@SelectProvider(type = CountByExampleProvider.class, method = "countByExample")
+	@ResultType(Long.class)
+	long countByExample(T example);
+	
+	@SelectProvider(type = SelectByExampleProvider.class, method = "selectByExample")
+	@ResultMap("BaseResultMap")
+	List<T> selectByExample(T example);
+	
 }
 

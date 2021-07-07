@@ -11,10 +11,10 @@
 	<context:property-placeholder
 		ignore-unresolvable="true" location="classpath*:*.properties" />
 	<aop:aspectj-autoproxy />
-	
-	<import resource="test-cache.xml"/>
 
-    <bean id="routeDataSource" class="com.jeesuite.mybatis.datasource.MutiRouteDataSource" />
+	<import resource="test-cache.xml" />
+
+	<bean id="routeDataSource" class="com.jeesuite.mybatis.datasource.MutiRouteDataSource" />
 
 	<bean id="transactionTemplate"
 		class="org.springframework.transaction.support.TransactionTemplate">
@@ -28,25 +28,18 @@
 		<property name="dataSource" ref="routeDataSource" />
 	</bean>
 
-	<bean id="routeSqlSessionFactory" class="org.mybatis.spring.SqlSessionFactoryBean">
+	<bean id="routeSqlSessionFactory" class="com.jeesuite.mybatis.spring.SqlSessionFactoryBean">
+	    <!-- 如果包含多个数据源则需要指定groupName，默认为：default -->
+	    <property name="groupName" value="default" />
 		<property name="configLocation" value="classpath:mybatis-configuration.xml" />
-		<property name="mapperLocations" value="classpath:mapper/*Mapper.xml" /> 
-		<property name="dataSource" ref="routeDataSource" />
+		<property name="mapperLocations" value="classpath:mapper/*Mapper.xml" />
 		<property name="typeAliasesPackage" value="com.jeesuite.mybatis.test.entity" />
-		<property name="plugins">
-            <array>
-                <bean class="com.jeesuite.mybatis.plugin.JeesuiteMybatisPluginContext">
-					<property name="crudDriver" value="default" />
-				    <property name="mapperLocations" value="classpath:mapper/*Mapper.xml" />
-				    <property name="interceptorHandlers" value="cache,rwRoute" />
-				</bean> 
-            </array>
-        </property>
+		<property name="dataSource" ref="routeDataSource" />
 	</bean>
 	
-	<bean class="com.jeesuite.mybatis.spring.MapperScannerConfigurer">
-        <property name="sqlSessionFactoryBeanName" value="routeSqlSessionFactory" />
+	<bean class="org.mybatis.spring.mapper.MapperScannerConfigurer">
+		<property name="sqlSessionFactoryBeanName" value="routeSqlSessionFactory" />
 		<property name="basePackage" value="com.jeesuite.mybatis.test.mapper" />
-    </bean>
-
+	</bean>
+	
 </beans>

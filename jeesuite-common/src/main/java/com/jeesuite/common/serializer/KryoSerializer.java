@@ -12,15 +12,18 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 
 /**
- * 使用 Kryo 实现序列化
  * @description <br>
- * @author <a href="mailto:wei.jiang@lifesense.com">vakin</a>
- * @date 2015年11月24日
- * @Copyright (c) 2015, lifesense.com
+ * @author <a href="mailto:vakinge@gmail.com">vakin</a>
+ * @date 2016年12月28日
  */
 public class KryoSerializer implements Serializer {
 
-	private final static Kryo kryo = new Kryo();
+	private final static Kryo kryo;
+	static {
+		kryo = new Kryo();
+		kryo.setRegistrationRequired(false);
+		kryo.setWarnUnregisteredClasses(false);
+	}
 
 
     @Override

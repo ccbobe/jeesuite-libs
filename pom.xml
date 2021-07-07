@@ -1,9 +1,10 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.jeesuite</groupId>
 	<artifactId>jeesuite-libs</artifactId>
-	<version>2</version>
+	<version>11</version>
 	<packaging>pom</packaging>
 	<description>java 后台开发套件</description>
 	<name>jeesuite-libs</name>
@@ -38,31 +39,43 @@
 
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-		<compiler.jdk.version>1.8</compiler.jdk.version>
-		<output.encoding>utf-8</output.encoding>
-		<spring.version>4.2.5.RELEASE</spring.version>
-		<kafka.version>0.10.0.1</kafka.version>
-		<zkclient.version>0.7</zkclient.version>
-		<zookeeper.version>3.4.6</zookeeper.version>
-		<jedis.version>2.8.0</jedis.version>
-		<mybatis.version>3.3.0</mybatis.version>
-		<mapper.version>3.3.4</mapper.version>
-		<druid.version>1.0.16</druid.version>
-		<junit.version>4.12</junit.version>
+		<java.version>1.8</java.version>
+        <maven.compiler.source>1.8</maven.compiler.source>
+		<maven.compiler.target>1.8</maven.compiler.target>
+		<maven-jar-plugin.version>3.1.1</maven-jar-plugin.version>
+		<spring.version>5.2.9.RELEASE</spring.version>
+		<spring-boot.version>2.3.4.RELEASE</spring-boot.version>
+		<kafka.version>2.3.1</kafka.version>
+		<zkclient.version>0.10</zkclient.version>
+		<zookeeper.version>3.4.14</zookeeper.version>
+		<jedis.version>2.9.0</jedis.version>
+		<mybatis.version>3.5.6</mybatis.version>
+		<mybatis-spring.version>2.0.5</mybatis-spring.version>
+		<mybatis-boot-starter>2.1.4</mybatis-boot-starter>
+		<druid.version>1.2.5</druid.version>
+		<guava.version>30.1.1-jre</guava.version>
+		<mysql.version>8.0.16</mysql.version>
+		<junit.version>[4.13.1,)</junit.version>
+		<fastjson.version>1.2.76</fastjson.version>
+		<okhttp3.version>4.9.1</okhttp3.version>
 	</properties>
 
 	<modules>
 		<module>jeesuite-common</module>
-		<module>jeesuite-kafka</module>
+		<!-- <module>jeesuite-kafka</module> -->
 		<module>jeesuite-spring</module>
 		<module>jeesuite-cache</module>
 		<module>jeesuite-scheduler</module>
 		<module>jeesuite-mybatis</module>
-		<module>jeesuite-rest</module>
-		<module>jeesuite-confcenter</module>
+		<!-- <module>jeesuite-rest</module> -->
 		<module>jeesuite-common2</module>
+		<!-- <module>jeesuite-filesystem</module> -->
+		<module>jeesuite-springboot-starter</module>
+		<module>jeesuite-springweb</module>
+		<!-- <module>jeesuite-search</module> -->
+		<module>jeesuite-event</module>
+		<module>jeesuite-security</module>
 		<module>jeesuite-log</module>
-		<module>jeesuite-filesystem</module>
 	</modules>
 
 	<dependencies>
@@ -70,25 +83,27 @@
 		<dependency>
 			<groupId>org.apache.logging.log4j</groupId>
 			<artifactId>log4j-core</artifactId>
-			<version>2.5</version>
+			<version>2.13.2</version>
+			<optional>true</optional>
 		</dependency>
 
 		<dependency>
 			<groupId>org.apache.logging.log4j</groupId>
 			<artifactId>log4j-slf4j-impl</artifactId>
-			<version>2.5</version>
+			<version>2.13.2</version>
+			<optional>true</optional>
 		</dependency>
 
 		<dependency>
 			<groupId>org.slf4j</groupId>
 			<artifactId>slf4j-api</artifactId>
-			<version>1.7.21</version>
+			<version>1.7.26</version>
 		</dependency>
 
 		<dependency>
 			<groupId>junit</groupId>
 			<artifactId>junit</artifactId>
-			<version>4.12</version>
+			<version>${junit.version}</version>
 			<scope>test</scope>
 		</dependency>
 
@@ -101,42 +116,70 @@
 
 	</dependencies>
 
+	<dependencyManagement>
+		<dependencies>
+			<dependency>
+				<groupId>mysql</groupId>
+				<artifactId>mysql-connector-java</artifactId>
+				<version>${mysql.version}</version>
+			</dependency>
+
+			<dependency>
+				<groupId>com.alibaba</groupId>
+				<artifactId>druid</artifactId>
+				<version>${druid.version}</version>
+			</dependency>
+
+			<dependency>
+				<groupId>com.alibaba</groupId>
+				<artifactId>fastjson</artifactId>
+				<version>${fastjson.version}</version>
+			</dependency>
+
+			<dependency>
+				<groupId>com.squareup.okhttp3</groupId>
+				<artifactId>okhttp</artifactId>
+				<version>${okhttp3.version}</version>
+			</dependency>
+
+
+			<dependency>
+				<groupId>javax.servlet</groupId>
+				<artifactId>javax.servlet-api</artifactId>
+				<version>4.0.1</version>
+				<scope>provided</scope>
+			</dependency>
+			
+			<dependency>
+			<groupId>org.mybatis.generator</groupId>
+			<artifactId>mybatis-generator-core</artifactId>
+			<version>1.3.7</version>
+			<optional>true</optional>
+		</dependency>
+		
+		<dependency>
+			<groupId>org.mybatis.spring.boot</groupId>
+			<artifactId>mybatis-spring-boot-starter</artifactId>
+			<version>${mybatis-boot-starter}</version>
+		</dependency>
+
+		</dependencies>
+	</dependencyManagement>
+
 	<profiles>
+	    <profile>
+	       <id>java8-doclint-disabled</id>
+	       <activation>
+	          <jdk>[1.8,)</jdk>
+	       </activation>
+	       <properties>
+	          <javadoc.opts>-Xdoclint:none</javadoc.opts>
+	       </properties>
+	    </profile>
 		<profile>
 			<id>release</id>
 			<build>
 				<plugins>
-					<plugin>
-						<groupId>org.apache.maven.plugins</groupId>
-						<artifactId>maven-compiler-plugin</artifactId>
-						<configuration>
-							<source>${compiler.jdk.version}</source>
-							<target>${compiler.jdk.version}</target>
-							<encoding>${output.encoding}</encoding>
-						</configuration>
-					</plugin>
-
-					<plugin>
-						<groupId>org.apache.maven.plugins</groupId>
-						<artifactId>maven-deploy-plugin</artifactId>
-						<configuration>
-							<skip>false</skip>
-						</configuration>
-					</plugin>
-
-					<plugin>
-						<groupId>org.apache.maven.plugins</groupId>
-						<artifactId>maven-source-plugin</artifactId>
-						<executions>
-							<execution>
-								<id>attach-sources</id>
-								<goals>
-									<goal>jar-no-fork</goal>
-								</goals>
-							</execution>
-						</executions>
-					</plugin>
-
 					<plugin>
 						<groupId>org.apache.maven.plugins</groupId>
 						<artifactId>maven-javadoc-plugin</artifactId>
@@ -177,12 +220,36 @@
 		<plugins>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-compiler-plugin</artifactId>
+				<artifactId>maven-resources-plugin</artifactId>
+				<version>3.2.0</version>
 				<configuration>
-					<source>${compiler.jdk.version}</source>
-					<target>${compiler.jdk.version}</target>
-					<encoding>${output.encoding}</encoding>
+					<encoding>${project.build.sourceEncoding}</encoding>
 				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<version>3.8.1</version>
+				<configuration>
+					<source>${maven.compiler.source}</source>
+					<target>${maven.compiler.target}</target>
+					<encoding>${project.build.sourceEncoding}</encoding>
+				</configuration>
+			</plugin>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-source-plugin</artifactId>
+				<version>2.4</version>
+				<executions>
+					<execution>
+						<id>attach-sources</id>
+						<phase>verify</phase>
+						<goals>
+							<goal>jar-no-fork</goal>
+						</goals>
+					</execution>
+				</executions>
 			</plugin>
 
 			<plugin>
@@ -192,14 +259,25 @@
 					<skip>false</skip>
 				</configuration>
 			</plugin>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-javadoc-plugin</artifactId>
+				<configuration>
+					<additionalJOptions>
+						<additionalJOption>-Xdoclint:none</additionalJOption>
+					</additionalJOptions>
+					<!-- <javadocExecutable>/Library/Java/JavaVirtualMachines/jdk1.8.0_121.jdk/Contents/Home/bin/javadoc</javadocExecutable> --> 
+				</configuration>
+			</plugin>
 		</plugins>
 	</build>
 
 	<distributionManagement>
-	    <!-- mvn clean deploy -P release -DskipTests=true -Dgpg.passphrase=密码 -->
+		<!-- mvn clean deploy -P release -DskipTests=true -Dgpg.passphrase=密码 -->
 		<snapshotRepository>
-			<id>ossrh</id>
-			<url>https://oss.sonatype.org/content/repositories/snapshots</url>
+			<id>snapshots</id>
+			<url>http://nexus.z.com/nexus/content/repositories/snapshots</url>
 		</snapshotRepository>
 		<repository>
 			<id>ossrh</id>

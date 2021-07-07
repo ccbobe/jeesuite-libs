@@ -155,6 +155,8 @@ public class XLS2CSV implements HSSFListener {
 				}
 				//sheetName
 				//System.out.println(orderedBSRs[sheetIndex].getSheetname() + " [" + (sheetIndex+1) + "]:" );
+				String sheetname = orderedBSRs[sheetIndex].getSheetname();
+				results.add(ExcelValidator.SHEET_NAME_PREFIX + sheetname);
 			}
 			break;
 
@@ -194,7 +196,7 @@ public class XLS2CSV implements HSSFListener {
 					thisStr = formatListener.formatNumberDateCell(frec);
 				}
 			} else {
-				thisStr = ExcelValidator.QUOTE + HSSFFormulaParser.toFormulaString(stubWorkbook, frec.getParsedExpression()) + ExcelValidator.QUOTE;
+				thisStr = HSSFFormulaParser.toFormulaString(stubWorkbook, frec.getParsedExpression());
 			}
 			break;
 		case StringRecord.sid:
@@ -213,7 +215,7 @@ public class XLS2CSV implements HSSFListener {
 
 			thisRow = lrec.getRow();
 			thisColumn = lrec.getColumn();
-			thisStr = ExcelValidator.QUOTE + lrec.getValue() + ExcelValidator.QUOTE;
+			thisStr = lrec.getValue();
 			break;
 		case LabelSSTRecord.sid:
 			LabelSSTRecord lsrec = (LabelSSTRecord) record;
@@ -221,9 +223,9 @@ public class XLS2CSV implements HSSFListener {
 			thisRow = lsrec.getRow();
 			thisColumn = lsrec.getColumn();
 			if(sstRecord == null) {
-				thisStr = ExcelValidator.QUOTE + "(No SST Record, can't identify string)" + ExcelValidator.QUOTE;
+				thisStr = "(No SST Record, can't identify string)";
 			} else {
-				thisStr = ExcelValidator.QUOTE + sstRecord.getString(lsrec.getSSTIndex()).toString() + ExcelValidator.QUOTE;
+				thisStr = sstRecord.getString(lsrec.getSSTIndex()).toString();
 			}
 			break;
 		case NoteRecord.sid:
@@ -232,7 +234,7 @@ public class XLS2CSV implements HSSFListener {
 			thisRow = nrec.getRow();
 			thisColumn = nrec.getColumn();
 			// TODO: Find object to match nrec.getShapeId()
-			thisStr = ExcelValidator.QUOTE + "(TODO)" + ExcelValidator.QUOTE;
+			thisStr = "(TODO)";
 			break;
 		case NumberRecord.sid:
 			NumberRecord numrec = (NumberRecord) record;
@@ -248,7 +250,7 @@ public class XLS2CSV implements HSSFListener {
 
 			thisRow = rkrec.getRow();
 			thisColumn = rkrec.getColumn();
-			thisStr = ExcelValidator.QUOTE + "(TODO)" + ExcelValidator.QUOTE;
+			thisStr = "(TODO)";
 			break;
 		default:
 			break;
@@ -303,19 +305,6 @@ public class XLS2CSV implements HSSFListener {
 			}
 			_resultRowTmp.setLength(0);
 		}
-	}
-
-	public static void main(String[] args) throws Exception {
-
-		long start = System.currentTimeMillis();
-		
-		XLS2CSV xls2csv = new XLS2CSV("/Users/ayg/Desktop/1.xls", -1);
-		List<String> process = xls2csv.process();
-		
-		
-		System.out.println("time:"+(System.currentTimeMillis() - start));
-		System.out.println(process.size());
-
 	}
 
 }

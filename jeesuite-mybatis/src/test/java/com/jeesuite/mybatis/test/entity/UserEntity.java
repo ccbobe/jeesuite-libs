@@ -1,8 +1,16 @@
 package com.jeesuite.mybatis.test.entity;
 
-import com.jeesuite.mybatis.core.BaseEntity;
 import java.util.Date;
-import javax.persistence.*;
+import java.util.Map;
+
+import javax.persistence.Column;
+import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
+import javax.persistence.Id;
+import javax.persistence.Table;
+import javax.persistence.Transient;
+
+import com.jeesuite.mybatis.core.BaseEntity;
 
 @Table(name = "users")
 public class UserEntity extends BaseEntity {
@@ -27,6 +35,9 @@ public class UserEntity extends BaseEntity {
 
     @Column(name = "updated_at")
     private Date updatedAt;
+    
+    @Transient
+    Map<String, String[]> dataProfileValues;
 
     /**
      * @return id
@@ -39,6 +50,7 @@ public class UserEntity extends BaseEntity {
      * @param id
      */
     public void setId(Integer id) {
+    	if(this.id != null && id != null)return;
         this.id = id;
     }
 
@@ -147,4 +159,14 @@ public class UserEntity extends BaseEntity {
     public void setUpdatedAt(Date updatedAt) {
         this.updatedAt = updatedAt;
     }
+
+	public Map<String, String[]> getDataProfileValues() {
+		return dataProfileValues;
+	}
+
+	public void setDataProfileValues(Map<String, String[]> dataProfileValues) {
+		this.dataProfileValues = dataProfileValues;
+	}
+    
+    
 }

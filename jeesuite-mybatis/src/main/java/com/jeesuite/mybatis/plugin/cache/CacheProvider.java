@@ -17,18 +17,25 @@ public interface CacheProvider extends Closeable{
 	
 	String getStr(String key);
 	
-	boolean set(String key,Object value,long expired);
+	boolean set(String key,Object value,long expireSeconds);
+	
+	boolean setStr(String key,Object value,long expireSeconds);
 	
 	boolean remove(String key);
 	
-	void putGroupKeys(String cacheGroupKey,String subKey,long expireSeconds);
+	boolean exists(String key);
 	
-	void clearGroupKeys(String cacheGroupKey);
+    void putGroup(String cacheGroupKey,String key);
 	
-	void clearGroupKey(String cacheGroupKey,String subKey);
-	
-	void clearExpiredGroupKeys(String cacheGroup);
-	
-	void clearGroup(String groupName);
+	void clearGroup(String groupName,String ...prefixs);
 
+	void addZsetValue(String key,String value,double score);
+	
+	boolean existZsetValue(String key,String value);
+	
+	boolean removeZsetValue(String key,String value);
+	
+	boolean removeZsetValues(String key,double minScore, double maxScore);
+	
+	boolean setnx(String key,String value,long expireSeconds);
 }

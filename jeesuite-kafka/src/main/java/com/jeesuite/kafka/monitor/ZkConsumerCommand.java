@@ -15,16 +15,16 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.I0Itec.zkclient.ZkClient;
 import org.I0Itec.zkclient.ZkConnection;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.protocol.SecurityProtocol;
-import org.apache.kafka.common.requests.MetadataResponse.TopicMetadata;
+import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.zookeeper.data.Stat;
 
 import com.jeesuite.kafka.monitor.model.BrokerInfo;
 import com.jeesuite.kafka.monitor.model.ConsumerGroupInfo;
 import com.jeesuite.kafka.monitor.model.TopicInfo;
 import com.jeesuite.kafka.monitor.model.TopicPartitionInfo;
+import com.jeesuite.kafka.serializer.ZKStringSerializer;
 
-import kafka.admin.AdminUtils;
 import kafka.api.PartitionOffsetRequestInfo;
 import kafka.cluster.Broker;
 import kafka.cluster.BrokerEndPoint;
@@ -33,7 +33,6 @@ import kafka.javaapi.OffsetResponse;
 import kafka.javaapi.PartitionMetadata;
 import kafka.javaapi.TopicMetadataRequest;
 import kafka.javaapi.consumer.SimpleConsumer;
-import kafka.utils.ZKStringSerializer$;
 import kafka.utils.ZkUtils;
 import scala.collection.Iterator;
 import scala.collection.Seq;
@@ -55,12 +54,25 @@ public class ZkConsumerCommand {
 	private ZkClient zkClient;
 	private ZkUtils zkUtils;
 	
+   public ZkConsumerCommand(String zkServers,String kafkaServers) {
+		
+		kafkaServerList.addAll(Arrays.asList(kafkaServers.split(",")));
+		
+		if(zkClient == null){			
+			zkClient = new ZkClient(zkServers, 10000, 10000, new ZKStringSerializer());
+		}
+		zkClient = new ZkClient(zkServers, 10000, 10000, new ZKStringSerializer());
+		
+		boolean isSecureKafkaCluster = false;
+		zkUtils = new ZkUtils(zkClient, new ZkConnection(zkServers), isSecureKafkaCluster);
+	}
+	
 	public ZkConsumerCommand(ZkClient zkClient,String zkServers,String kafkaServers) {
 		
 		kafkaServerList.addAll(Arrays.asList(kafkaServers.split(",")));
 		
 		if(zkClient == null){			
-			zkClient = new ZkClient(zkServers, 10000, 10000, ZKStringSerializer$.MODULE$);
+			zkClient = new ZkClient(zkServers, 10000, 10000, new ZKStringSerializer());
 		}
 		this.zkClient = zkClient;
 		
@@ -110,7 +122,7 @@ public class ZkConsumerCommand {
 		Iterator<Broker> iterator = brokers.toList().iterator();
 		while(iterator.hasNext()){
 			Broker broker = iterator.next();
-			Node node = broker.getNode(SecurityProtocol.PLAINTEXT);
+			Node node = broker.getNode(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)).get();
 			result.add(new BrokerInfo(node.idString(), node.host(), node.port()));
 		}
 		return result;
@@ -134,14 +146,14 @@ public class ZkConsumerCommand {
 		return result;
 	}
 	
-	public TopicMetadata getTopicMetadata(String topic) {
-		TopicMetadata topicMetadata = AdminUtils.fetchTopicMetadataFromZk(topic, zkUtils);
-		return topicMetadata;
-	}
-	
-	public int getPartitionCounts(String topic){
-		return getTopicMetadata(topic).partitionMetadata().size();
-	}
+//	public TopicMetadata getTopicMetadata(String topic) {
+//		TopicMetadata topicMetadata = AdminUtils.fetchTopicMetadataFromZk(topic, zkUtils);
+//		return topicMetadata;
+//	}
+//	
+//	public int getPartitionCounts(String topic){
+//		return getTopicMetadata(topic).partitionMetadata().size();
+//	}
 	
 	public List<String> getConsumerClusterNodes(String groupId){
 		String path = "/consumers/" + groupId + "/ids";
@@ -175,6 +187,11 @@ public class ZkConsumerCommand {
 			result.add(tp);
 		}
 		return result;
+	}
+	
+	public void resetTopicOffsets(String groupId,String topic,int partition,long newOffsets){
+		String path = "/consumers/" + groupId + "/offsets/"+topic + "/" + partition;
+		zkClient.writeData(path, String.valueOf(newOffsets));
 	}
 	
 	public String fetchPartitionOwner(String groupId,String topic,int partition){

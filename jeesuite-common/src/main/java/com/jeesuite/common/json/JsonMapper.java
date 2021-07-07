@@ -1,8 +1,11 @@
 package com.jeesuite.common.json;
 
 import java.io.IOException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.commons.lang3.StringUtils;
 
@@ -51,19 +54,17 @@ public class JsonMapper {
 	
 	public JsonMapper dateAndTimestampConvert(boolean enabled) {
 		if(enabled){
-			mapper.enable(SerializationFeature.WRITE_ENUMS_USING_TO_STRING);
-			mapper.enable(DeserializationFeature.READ_ENUMS_USING_TO_STRING);
+			mapper.enable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+			mapper.enable(DeserializationFeature.READ_DATE_TIMESTAMPS_AS_NANOSECONDS);
 		}else{
-			mapper.disable(SerializationFeature.WRITE_ENUMS_USING_TO_STRING);
-			mapper.disable(DeserializationFeature.READ_ENUMS_USING_TO_STRING);
+			mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+			mapper.disable(DeserializationFeature.READ_DATE_TIMESTAMPS_AS_NANOSECONDS);
+			mapper.setDateFormat(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss"));
 		}
 		return this;
 		
 	}
 
-	/**
-	 * 创建只输出非Null且非Empty(如List.isEmpty)的属性到Json字符串的Mapper,建议在外部接口中使用.
-	 */
 	public static JsonMapper nonEmptyMapper() {
 		return new JsonMapper(Include.NON_EMPTY);
 	}
@@ -72,18 +73,11 @@ public class JsonMapper {
 		return new JsonMapper(Include.NON_NULL);
 	}
 
-	/**
-	 * 创建只输出初始值被改变的属性到Json字符串的Mapper, 最节约的存储方式，建议在内部接口中使用。
-	 */
 	public static JsonMapper nonDefaultMapper() {
 		return new JsonMapper(Include.NON_DEFAULT);
 	}
 
-	/**
-	 * Object可以是POJO，也可以是Collection或数组。
-	 * 如果对象为Null, 返回"null".
-	 * 如果集合为空集合, 返回"[]".
-	 */
+
 	public String toJson(Object object) {
 
 		try {
@@ -93,15 +87,7 @@ public class JsonMapper {
 		}
 	}
 
-	/**
-	 * 反序列化POJO或简单Collection如List<String>.
-	 * 
-	 * 如果JSON字符串为Null或"null"字符串, 返回Null.
-	 * 如果JSON字符串为"[]", 返回空集合.
-	 * 
-	 * 如需反序列化复杂Collection如List<MyBean>, 请使用fromJson(String,JavaType)
-	 * @see #fromJson(String, JavaType)
-	 */
+
 	public <T> T toObject(String jsonString, Class<T> clazz) {
 		if (StringUtils.isEmpty(jsonString)) {
 			return null;
@@ -119,14 +105,19 @@ public class JsonMapper {
 			return null;
 		}
 
-		JavaType javaType = mapper.getTypeFactory().constructParametrizedType(ArrayList.class,ArrayList.class, elementType);
+		JavaType javaType = mapper.getTypeFactory().constructParametricType(ArrayList.class, elementType);
+		return toObject(jsonString, javaType);
+	}
+	
+	public <K,V> Map<K, V> toHashMap(String jsonString, Class<K> keyType, Class<V> valueType) {
+		if (StringUtils.isEmpty(jsonString)) {
+			return null;
+		}
+		JavaType javaType = mapper.getTypeFactory().constructParametricType(HashMap.class, keyType,valueType);
 		return toObject(jsonString, javaType);
 	}
 
-	/**
-	 * 反序列化复杂Collection如List<Bean>, 先使用函數createCollectionType构造类型,然后调用本函数.
-	 * @see #createCollectionType(Class, Class...)
-	 */
+
 	@SuppressWarnings("unchecked")
 	public <T> T toObject(String jsonString, JavaType javaType) {
 		if (StringUtils.isEmpty(jsonString)) {
@@ -140,9 +131,6 @@ public class JsonMapper {
 		}
 	}
 
-	/**
-	 * 當JSON裡只含有Bean的部分屬性時，更新一個已存在Bean，只覆蓋該部分的屬性.
-	 */
 	@SuppressWarnings("unchecked")
 	public <T> T update(String jsonString, T object) {
 		try {
@@ -152,18 +140,10 @@ public class JsonMapper {
 		}
 	}
 
-	/**
-	 * 輸出JSONP格式數據.
-	 */
 	public String toJsonP(String functionName, Object object) {
 		return toJson(new JSONPObject(functionName, object));
 	}
 
-
-
-	/**
-	 * 取出Mapper做进一步的设置或使用其他序列化API.
-	 */
 	public ObjectMapper getMapper() {
 		return mapper;
 	}
@@ -171,7 +151,8 @@ public class JsonMapper {
 	public static JsonMapper getDefault() {
 		if(defaultMapper == null){
 			defaultMapper = new JsonMapper();
-			defaultMapper.dateAndTimestampConvert(false);
+			defaultMapper.enumAndStringConvert(true);
+			defaultMapper.dateAndTimestampConvert(true);
 		}
 		return defaultMapper;
 	}

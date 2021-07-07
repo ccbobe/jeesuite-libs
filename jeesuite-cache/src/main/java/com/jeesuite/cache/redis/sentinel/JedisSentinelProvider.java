@@ -47,6 +47,7 @@ public class JedisSentinelProvider implements JedisProvider<Jedis,BinaryJedis>{
 	
 	private ScheduledExecutorService failoverCheker;
 	
+	private boolean tenantModeEnabled; 
 
 	public JedisSentinelProvider(final String groupName,final JedisPoolConfig jedisPoolConfig, String[] servers, final int timeout, final String password, final int database, final String clientName, final String masterName) {
 		super();
@@ -68,8 +69,8 @@ public class JedisSentinelProvider implements JedisProvider<Jedis,BinaryJedis>{
 						logger.warn("JedisDataException happend error:{} and will re-init jedisPool" ,e.getMessage());
 						//重新初始化jedisPool
 						synchronized (jedisPool) {							
-							//jedisPool.destroy();
-							//jedisPool = new JedisSentinelPool(masterName, sentinels, jedisPoolConfig, timeout, password, database,clientName);
+							jedisPool.destroy();
+							jedisPool = new JedisSentinelPool(masterName, sentinels, jedisPoolConfig, timeout, password, database,clientName);
 							logger.info("jedisPool re-init ok,currentHostMaster is:{}:{}" ,jedisPool.getCurrentHostMaster().getHost(),jedisPool.getCurrentHostMaster().getPort());
 						}
 					}
@@ -77,7 +78,7 @@ public class JedisSentinelProvider implements JedisProvider<Jedis,BinaryJedis>{
 					try {jedis.close();} catch (Exception e2) {}
 				}
 			}
-		}, 5, 5, TimeUnit.SECONDS);
+		}, 1, 1, TimeUnit.MINUTES);
 	}
 
 	public Jedis get() throws JedisException {
@@ -130,6 +131,15 @@ public class JedisSentinelProvider implements JedisProvider<Jedis,BinaryJedis>{
 	@Override
 	public String groupName() {
 		return groupName;
+	}
+
+	public void setTenantModeEnabled(boolean tenantModeEnabled) {
+		this.tenantModeEnabled = tenantModeEnabled;
+	}
+	
+	@Override
+	public boolean tenantMode() {
+		return tenantModeEnabled;
 	}
 
 }
